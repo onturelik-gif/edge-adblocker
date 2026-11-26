@@ -74,6 +74,10 @@
     ".interstitial-ad",
     ".popup-ad",
     ".overlay-ad",
+    ".samCodeUnit",
+    ".samBannerUnit",
+    ".samItem",
+    ".samTextUnit",
     ".fc-ab-root",
     ".fc-dialog-overlay",
     "#onetrust-consent-sdk",
@@ -400,15 +404,25 @@
     }
   }
 
-  // Interactive Element Picker (uBlock-style)
+  // Interactive Element Picker (uBlock-style, with full-screen shield so iframes can be picked too)
   let pickerActive = false;
+  let pickerShield = null;
   let pickerOverlay = null;
   let pickerToolbar = null;
   let pickerHoveredEl = null;
 
   function buildCssSelector(el) {
     if (!el || !(el instanceof Element)) return "";
-    if (el.id && /^[a-zA-Z][\w-]*$/.test(el.id)) {
+    if (el.tagName === "IFRAME") {
+      const src = el.getAttribute("src") || "";
+      try {
+        const host = new URL(src, location.href).hostname;
+        if (host && host !== location.hostname) {
+          return `iframe[src*="${CSS.escape(host)}"]`;
+        }
+      } catch {}
+    }
+    if (el.id && /^[a-zA-Z][\w-]*$/.test(el.id) && !/\d{4,}/.test(el.id)) {
       return `#${CSS.escape(el.id)}`;
     }
     const parts = [];
@@ -446,6 +460,10 @@
     if (!pickerActive) return;
     pickerActive = false;
     pickerHoveredEl = null;
+    if (pickerShield) {
+      pickerShield.remove();
+      pickerShield = null;
+    }
     if (pickerOverlay) {
       pickerOverlay.remove();
       pickerOverlay = null;
@@ -454,14 +472,11 @@
       pickerToolbar.remove();
       pickerToolbar = null;
     }
-    document.removeEventListener("mousemove", onPickerMove, true);
-    document.removeEventListener("click", onPickerClick, true);
     document.removeEventListener("keydown", onPickerKeydown, true);
   }
 
   function resolvePickTarget(el) {
     if (!el || !(el instanceof Element)) return null;
-    // If user clicked an image/video/span inside an <a> banner, promote to the <a> so the link is also removed
     const enclosingAnchor = el.closest("a[href]");
     if (enclosingAnchor && enclosingAnchor !== document.body) {
       return enclosingAnchor;
@@ -469,10 +484,17 @@
     return el;
   }
 
+  function elementUnderPoint(x, y) {
+    if (pickerShield) pickerShield.style.pointerEvents = "none";
+    const raw = document.elementFromPoint(x, y);
+    if (pickerShield) pickerShield.style.pointerEvents = "auto";
+    return raw;
+  }
+
   function onPickerMove(e) {
     if (!pickerActive || !pickerOverlay) return;
-    const raw = document.elementFromPoint(e.clientX, e.clientY);
-    if (!raw || raw === pickerOverlay || raw === pickerToolbar || pickerToolbar?.contains(raw)) {
+    const raw = elementUnderPoint(e.clientX, e.clientY);
+    if (!raw || raw === pickerOverlay || raw === pickerShield || raw === pickerToolbar || pickerToolbar?.contains(raw)) {
       return;
     }
     if (raw === document.body || raw === document.documentElement) return;
@@ -494,7 +516,8 @@
     e.stopPropagation();
     e.stopImmediatePropagation();
 
-    const target = resolvePickTarget(pickerHoveredEl || e.target);
+    const raw = elementUnderPoint(e.clientX, e.clientY);
+    const target = resolvePickTarget(pickerHoveredEl || raw);
     stopElementPicker();
 
     if (target && target instanceof Element) {
@@ -528,6 +551,14 @@
     if (pickerActive) return;
     pickerActive = true;
 
+    pickerShield = document.createElement("div");
+    pickerShield.id = "edgeshield-picker-shield";
+    pickerShield.style.cssText =
+      "position:fixed;inset:0;z-index:2147483645;background:transparent;cursor:crosshair;";
+    pickerShield.addEventListener("mousemove", onPickerMove, true);
+    pickerShield.addEventListener("click", onPickerClick, true);
+    document.documentElement.appendChild(pickerShield);
+
     pickerOverlay = document.createElement("div");
     pickerOverlay.id = "edgeshield-picker-overlay";
     pickerOverlay.style.cssText =
@@ -549,8 +580,6 @@
         stopElementPicker();
       });
 
-    document.addEventListener("mousemove", onPickerMove, true);
-    document.addEventListener("click", onPickerClick, true);
     document.addEventListener("keydown", onPickerKeydown, true);
   }
 
