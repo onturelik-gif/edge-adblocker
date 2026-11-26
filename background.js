@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = {
   blockPopups: true,
   whitelist: [],
   customBlocked: [],
+  customSelectors: {},
   totalBlocked: 0
 };
 
@@ -471,6 +472,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           lastVideoClickByTab.set(tabId, Date.now());
         }
         sendResponse({ ok: true });
+        break;
+      }
+
+      case "ADD_CUSTOM_SELECTOR": {
+        const domain = normalizeDomain(message.domain);
+        const selector =
+          typeof message.selector === "string" ? message.selector.trim() : "";
+        if (!domain || !selector) {
+          sendResponse({ ok: false });
+          return;
+        }
+        const map = { ...(settings.customSelectors || {}) };
+        const existing = Array.isArray(map[domain]) ? map[domain] : [];
+        if (!existing.includes(selector)) {
+          map[domain] = [...existing, selector];
+          await chrome.storage.local.set({ ...settings, customSelectors: map });
+        }
+        const tabId = sender?.tab?.id;
+        if (typeof tabId === "number") {
+          await incrementBlocked(tabId, 1);
+        }
+        sendResponse({ ok: true });
+        break;
+      }
+
+      case "CLEAR_SITE_SELECTORS": {
+        const domain = normalizeDomain(message.domain);
+        if (!domain) {
+          sendResponse({ ok: false });
+          return;
+        }
+        const map = { ...(settings.customSelectors || {}) };
+        delete map[domain];
+        const updated = { ...settings, customSelectors: map };
+        await chrome.storage.local.set(updated);
+        sendResponse({ ok: true, settings: updated });
         break;
       }
 

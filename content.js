@@ -1,6 +1,11 @@
 (() => {
   const STYLE_ID = "edgeshield-cosmetic-style";
   const AGGRESSIVE_STYLE_ID = "edgeshield-aggressive-style";
+  const CUSTOM_STYLE_ID = "edgeshield-custom-style";
+
+  const BETTING_AD_RE =
+    /(bet\b|bahis|casino|slot|bonus|jackpot|poker|rulet|freespin|denemebonus|canlibahis|pusulabet|venusbet|truvabet|showbahis|evetabi|reklam|sponsor|728x90|468x60|300x250|300x600|160x600|970x90|970x250)/i;
+  const REDIRECT_PATH_RE = /(\/go\/|\/out\/|\/git\/|\/click\/|\/redirect|\/partner|\/aff)/i;
 
   // Bait-prone generic selectors hidden off-screen so offsetHeight stays > 0 (defeats anti-adblock checks)
   const STEALTH_HIDE_SELECTORS = [
@@ -200,6 +205,7 @@
     }
 
     unlockScrollIfLocked();
+    hideHeuristicBanners();
 
     if (newlyHidden > 0) {
       chrome.runtime
@@ -207,6 +213,203 @@
         .catch(() => {});
     }
   }
+
+  function hideHeuristicBanners() {
+    if (!isAggressiveActive || !document.body) return;
+    let hiddenCount = 0;
+
+    try {
+      const anchors = document.querySelectorAll("a[href]");
+      for (const a of anchors) {
+        if (a.dataset.edgeshieldBannerChecked) continue;
+        a.dataset.edgeshieldBannerChecked = "1";
+
+        if (a.closest("nav, header")) continue;
+        const media = a.querySelector("img, video, picture");
+        if (!media) continue;
+
+        const href = a.href || "";
+        const rel = (a.getAttribute("rel") || "").toLowerCase();
+        const target = (a.getAttribute("target") || "").toLowerCase();
+        const imgSrc = media.getAttribute("src") || media.getAttribute("data-src") || "";
+        const imgAlt = media.getAttribute("alt") || "";
+
+        const isCrossOrigin = (() => {
+          try {
+            return new URL(href, location.href).origin !== location.origin;
+          } catch {
+            return false;
+          }
+        })();
+
+        const matchesBetOrAd =
+          BETTING_AD_RE.test(href) ||
+          BETTING_AD_RE.test(imgSrc) ||
+          BETTING_AD_RE.test(imgAlt);
+
+        const isSponsoredRedirect =
+          (target === "_blank" || rel.includes("sponsored") || rel.includes("nofollow")) &&
+          (REDIRECT_PATH_RE.test(href) || isCrossOrigin) &&
+          (matchesBetOrAd || /\.gif(\?|$)/i.test(imgSrc));
+
+        if (matchesBetOrAd || isSponsoredRedirect) {
+          a.style.setProperty("display", "none", "important");
+          hiddenCount += 1;
+        }
+      }
+    } catch {}
+
+    if (hiddenCount > 0) {
+      chrome.runtime
+        .sendMessage({ type: "COSMETIC_BLOCKED", count: hiddenCount })
+        .catch(() => {});
+    }
+  }
+
+  // Interactive Element Picker (uBlock-style)
+  let pickerActive = false;
+  let pickerOverlay = null;
+  let pickerToolbar = null;
+  let pickerHoveredEl = null;
+
+  function buildCssSelector(el) {
+    if (!el || !(el instanceof Element)) return "";
+    if (el.id && /^[a-zA-Z][\w-]*$/.test(el.id)) {
+      return `#${CSS.escape(el.id)}`;
+    }
+    const parts = [];
+    let cur = el;
+    let depth = 0;
+    while (cur && cur.nodeType === 1 && cur !== document.body && cur !== document.documentElement && depth < 4) {
+      let part = cur.tagName.toLowerCase();
+      if (cur.id && /^[a-zA-Z][\w-]*$/.test(cur.id)) {
+        part = `#${CSS.escape(cur.id)}`;
+        parts.unshift(part);
+        break;
+      }
+      const classes = Array.from(cur.classList)
+        .filter((c) => c && !c.startsWith("edgeshield") && c.length < 40)
+        .slice(0, 2);
+      if (classes.length > 0) {
+        part += "." + classes.map((c) => CSS.escape(c)).join(".");
+      } else if (cur.parentElement) {
+        const siblings = Array.from(cur.parentElement.children).filter(
+          (s) => s.tagName === cur.tagName
+        );
+        if (siblings.length > 1) {
+          const idx = siblings.indexOf(cur) + 1;
+          part += `:nth-of-type(${idx})`;
+        }
+      }
+      parts.unshift(part);
+      cur = cur.parentElement;
+      depth += 1;
+    }
+    return parts.join(" > ");
+  }
+
+  function stopElementPicker() {
+    if (!pickerActive) return;
+    pickerActive = false;
+    pickerHoveredEl = null;
+    if (pickerOverlay) {
+      pickerOverlay.remove();
+      pickerOverlay = null;
+    }
+    if (pickerToolbar) {
+      pickerToolbar.remove();
+      pickerToolbar = null;
+    }
+    document.removeEventListener("mousemove", onPickerMove, true);
+    document.removeEventListener("click", onPickerClick, true);
+    document.removeEventListener("keydown", onPickerKeydown, true);
+  }
+
+  function onPickerMove(e) {
+    if (!pickerActive || !pickerOverlay) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (!el || el === pickerOverlay || el === pickerToolbar || pickerToolbar?.contains(el)) {
+      return;
+    }
+    if (el === document.body || el === document.documentElement) return;
+    pickerHoveredEl = el;
+    const rect = el.getBoundingClientRect();
+    pickerOverlay.style.left = `${rect.left}px`;
+    pickerOverlay.style.top = `${rect.top}px`;
+    pickerOverlay.style.width = `${rect.width}px`;
+    pickerOverlay.style.height = `${rect.height}px`;
+    pickerOverlay.style.display = "block";
+  }
+
+  function onPickerClick(e) {
+    if (!pickerActive) return;
+    if (pickerToolbar && pickerToolbar.contains(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    const target = pickerHoveredEl || e.target;
+    stopElementPicker();
+
+    if (target && target instanceof Element) {
+      const selector = buildCssSelector(target);
+      target.style.setProperty("display", "none", "important");
+      if (selector) {
+        const hostname = getCurrentHostname();
+        chrome.runtime
+          .sendMessage({
+            type: "ADD_CUSTOM_SELECTOR",
+            domain: hostname,
+            selector
+          })
+          .catch(() => {});
+      }
+    }
+  }
+
+  function onPickerKeydown(e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      stopElementPicker();
+    }
+  }
+
+  function startElementPicker() {
+    if (window.self !== window.top) return;
+    if (pickerActive) return;
+    pickerActive = true;
+
+    pickerOverlay = document.createElement("div");
+    pickerOverlay.id = "edgeshield-picker-overlay";
+    pickerOverlay.style.cssText =
+      "position:fixed;z-index:2147483646;pointer-events:none;background:rgba(239,68,68,0.22);border:2px solid #ef4444;border-radius:4px;display:none;box-sizing:border-box;";
+    document.documentElement.appendChild(pickerOverlay);
+
+    pickerToolbar = document.createElement("div");
+    pickerToolbar.id = "edgeshield-picker-toolbar";
+    pickerToolbar.style.cssText =
+      "position:fixed;right:16px;bottom:16px;z-index:2147483647;background:#0f172a;color:#f8fafc;border:1px solid #334155;border-radius:10px;padding:10px 14px;font-family:'Segoe UI',sans-serif;font-size:13px;box-shadow:0 10px 25px rgba(0,0,0,0.45);display:flex;align-items:center;gap:10px;";
+    pickerToolbar.innerHTML =
+      "<span><strong>EdgeShield Öğe Seçici:</strong> Gizlemek istediğin reklama tıkla</span><button id='edgeshield-picker-cancel' style='background:#ef4444;color:#fff;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:600;font-size:12px;'>İptal (ESC)</button>";
+    document.documentElement.appendChild(pickerToolbar);
+
+    pickerToolbar
+      .querySelector("#edgeshield-picker-cancel")
+      ?.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        stopElementPicker();
+      });
+
+    document.addEventListener("mousemove", onPickerMove, true);
+    document.addEventListener("click", onPickerClick, true);
+    document.addEventListener("keydown", onPickerKeydown, true);
+  }
+
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg?.type === "START_ELEMENT_PICKER") {
+      startElementPicker();
+    }
+  });
 
   function scheduleScan() {
     if (scanTimer) return;
@@ -273,6 +476,15 @@
       stopYouTubeWatcher();
     }
 
+    const siteSelectors =
+      allowed && settings.customSelectors && Array.isArray(settings.customSelectors[hostname])
+        ? settings.customSelectors[hostname]
+        : [];
+    removeStyle(CUSTOM_STYLE_ID);
+    if (siteSelectors.length > 0) {
+      injectStyle(CUSTOM_STYLE_ID, `${siteSelectors.join(", ")}${hideCss}`);
+    }
+
     if (isCosmeticActive || isAggressiveActive) {
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", scanAndReport, {
@@ -320,7 +532,8 @@
     cosmeticFiltering: true,
     aggressiveMode: true,
     blockPopups: true,
-    whitelist: []
+    whitelist: [],
+    customSelectors: {}
   };
 
   window.addEventListener("edgeshield-popup-blocked", () => {
@@ -340,7 +553,8 @@
       changes.cosmeticFiltering ||
       changes.aggressiveMode ||
       changes.blockPopups ||
-      changes.whitelist
+      changes.whitelist ||
+      changes.customSelectors
     ) {
       chrome.storage.local.get(STORAGE_KEYS, (settings) => {
         applyState(settings);

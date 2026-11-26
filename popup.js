@@ -5,6 +5,9 @@ const els = {
   siteDomain: document.getElementById("siteDomain"),
   statusPill: document.getElementById("statusPill"),
   whitelistBtn: document.getElementById("whitelistBtn"),
+  pickerBtn: document.getElementById("pickerBtn"),
+  clearPickedBtn: document.getElementById("clearPickedBtn"),
+  pickedCount: document.getElementById("pickedCount"),
   pageBlockedCount: document.getElementById("pageBlockedCount"),
   totalBlockedCount: document.getElementById("totalBlockedCount"),
   resetStatsBtn: document.getElementById("resetStatsBtn"),
@@ -99,13 +102,23 @@ function render(state) {
   if (!hostname) {
     els.siteDomain.textContent = "Tarayıcı Sayfası";
     els.whitelistBtn.disabled = true;
-    els.whitelistBtn.textContent = "Bu Sayfada Kullanılamaz";
+    els.pickerBtn.disabled = true;
+    els.clearPickedBtn.classList.add("hidden");
+    els.whitelistBtn.textContent = "Kullanılamaz";
     els.statusPill.textContent = settings.enabled ? "Hazır" : "Duraklatıldı";
     els.statusPill.className =
       "status-pill" + (settings.enabled ? "" : " paused");
   } else {
     els.siteDomain.textContent = hostname;
     els.whitelistBtn.disabled = !settings.enabled;
+    els.pickerBtn.disabled = !settings.enabled || isWhitelisted;
+
+    const picked =
+      settings.customSelectors && Array.isArray(settings.customSelectors[hostname])
+        ? settings.customSelectors[hostname].length
+        : 0;
+    els.pickedCount.textContent = String(picked);
+    els.clearPickedBtn.classList.toggle("hidden", picked === 0);
 
     if (!settings.enabled) {
       els.statusPill.textContent = "Duraklatıldı";
@@ -114,11 +127,11 @@ function render(state) {
     } else if (isWhitelisted) {
       els.statusPill.textContent = "İzin Verildi";
       els.statusPill.className = "status-pill whitelisted";
-      els.whitelistBtn.textContent = "Bu Sitede Korumayı Aç";
+      els.whitelistBtn.textContent = "Korumayı Aç";
     } else {
       els.statusPill.textContent = "Korunuyor";
       els.statusPill.className = "status-pill";
-      els.whitelistBtn.textContent = "Bu Sitede Duraklat";
+      els.whitelistBtn.textContent = "Sitede Duraklat";
     }
   }
 
@@ -217,6 +230,24 @@ els.whitelistBtn.addEventListener("click", async () => {
     tabId: currentState.tabId
   });
   if (res?.ok && currentState.tabId >= 0) {
+    chrome.tabs.reload(currentState.tabId);
+  }
+  await loadState();
+});
+
+els.pickerBtn.addEventListener("click", async () => {
+  if (!currentState || currentState.tabId < 0) return;
+  chrome.tabs.sendMessage(currentState.tabId, { type: "START_ELEMENT_PICKER" }).catch(() => {});
+  window.close();
+});
+
+els.clearPickedBtn.addEventListener("click", async () => {
+  if (!currentState?.hostname) return;
+  await sendMessage({
+    type: "CLEAR_SITE_SELECTORS",
+    domain: currentState.hostname
+  });
+  if (currentState.tabId >= 0) {
     chrome.tabs.reload(currentState.tabId);
   }
   await loadState();

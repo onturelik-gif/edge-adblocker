@@ -37,7 +37,7 @@
               <h1>EdgeShield</h1>
               <span class="mode-badge" id="aggressiveBadge">AGRESİF</span>
             </div>
-            <span class="subtitle">AdBlock v1.3.1</span>
+            <span class="subtitle">AdBlock v1.4.0</span>
           </div>
         </div>
 
@@ -55,8 +55,16 @@
             <span class="status-pill" id="statusPill">Korunuyor</span>
           </div>
         </div>
-        <button class="btn-whitelist" id="whitelistBtn" disabled>
-          Bu Sitede Duraklat
+        <div class="site-actions">
+          <button class="btn-whitelist" id="whitelistBtn" disabled>
+            Bu Sitede Duraklat
+          </button>
+          <button class="btn-picker" id="pickerBtn" disabled title="Sayfadan reklam kutusu seçip kalıcı gizle">
+            Öğe Seç &amp; Engelle
+          </button>
+        </div>
+        <button class="btn-clear-picked hidden" id="clearPickedBtn">
+          Bu Sitede Seçilen Öğeleri Temizle (<span id="pickedCount">0</span>)
         </button>
       </section>
 

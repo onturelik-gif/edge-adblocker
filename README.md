@@ -8,6 +8,7 @@ Microsoft Edge (Chromium) için **Manifest V3** mimarisiyle geliştirilmiş hız
 - **Agresif Mod:** 60 ek agresif ağ kuralı (video reklamları, pop-under, bildirim spamı, çerez/CMP katmanları ve üçüncü parti genel reklam yolları), genişletilmiş kozmetik gizleme ve YouTube otomatik reklam atlama/hızlandırma.
 - **Pop-up & Yan Sekme Koruması:** Video oynatıcılara tıklayınca açılan yan reklam sekmelerini (`window.open`, gizli `_blank` tıklamaları, görünmez tıklama katmanları) ve mevcut sekmeyi reklama çevirip 2. sekmeye atan pop-under hilelerini engeller.
 - **Anti-Tespit (Stealth) Koruması:** Tuzak reklam betiklerini sertçe engellemek yerine yerel boş stub dosyalarına (`200 OK`) yönlendirir, `offsetHeight === 0` tuzaklarını ekran dışı gizlemeyle atlatır ve anti-adblock JS kontrollerini (`canRunAds`, `blockAdBlock`, `[native code]`) maskeler.
+- **Bahis/Banner Temizleyici & Öğe Seçici (Element Picker):** Kendi sunucusundan yüklenen bahis/casino/GIF banner'ları otomatik gizler; ayrıca uBlock tarzı **Öğe Seç & Engelle** aracıyla herhangi bir sayfadaki özel reklam kutusunu tek tıkla kalıcı olarak gizleyebilirsin.
 - **Kozmetik Filtreleme:** Sayfa içinde kalan boş reklam kutularını, sponsorlu alanları ve reklam iframe'lerini otomatik gizler.
 - **Türkçe Kontrol Paneli:** Genel açma/kapama, site bazlı beyaz liste (whitelist), canlı sayfa ve toplam engelleme sayaçları.
 - **Özel Alan Adı Engelleme:** İstediğin herhangi bir alan adını tek tıkla engelleme listesine ekleyip çıkarabilirsin.
