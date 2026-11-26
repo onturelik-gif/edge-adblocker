@@ -218,6 +218,32 @@
       for (const key of ["fuckAdBlock", "blockAdBlock", "sniffAdBlock"]) {
         defineReadOnly(window, key, fakeDetector);
       }
+
+      // Stealth fetch wrapper: if a bait ad/tracker fetch fails due to network blocking, return synthetic 200 OK
+      if (typeof window.fetch === "function") {
+        const nativeFetch = window.fetch.bind(window);
+        const BAIT_FETCH_RE =
+          /(ads|adserver|adservice|pagead|googlesyndication|doubleclick|popads|popcash|propeller|adsterra|exoclick|monetag|clickadu|hilltopads|adcash|admaven|prebid|reklam|adblock|analytics|tracker)/i;
+
+        window.fetch = maskAsNative(function fetch(input, init) {
+          const urlStr =
+            typeof input === "string"
+              ? input
+              : input && typeof input.url === "string"
+              ? input.url
+              : "";
+          return nativeFetch(input, init).catch((err) => {
+            if (isGuardActive() && urlStr && BAIT_FETCH_RE.test(urlStr)) {
+              return new Response("/* ok */", {
+                status: 200,
+                statusText: "OK",
+                headers: { "Content-Type": "application/javascript" }
+              });
+            }
+            throw err;
+          });
+        }, "fetch");
+      }
     } catch {}
   })();
 
