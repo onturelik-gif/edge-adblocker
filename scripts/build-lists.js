@@ -141,8 +141,10 @@ function parseNetworkRule(line, id) {
   }
 
   // Prefer clean domain/anchored rules (||domain^ or ||domain/path)
+  // Chromium MV3 strictly forbids || followed by *, ., /, ^, or | in the middle
   if (!pattern.startsWith("||")) return null;
-  if (pattern.includes(" ") || pattern.includes("|", 2)) return null;
+  if (!/^\|\|[a-zA-Z0-9]/.test(pattern)) return null;
+  if (pattern.includes(" ") || pattern.slice(2, -1).includes("|")) return null;
 
   const condition = { urlFilter: pattern };
   const types = new Set();
