@@ -2,6 +2,7 @@
   const STYLE_ID = "edgeshield-cosmetic-style";
   const AGGRESSIVE_STYLE_ID = "edgeshield-aggressive-style";
   const CUSTOM_STYLE_ID = "edgeshield-custom-style";
+  const COMMUNITY_COSMETIC_STYLE_ID = "edgeshield-community-cosmetic-style";
 
   const BETTING_AD_RE =
     /(bet\b|bahis|casino|slot|bonus|jackpot|poker|rulet|freespin|denemebonus|canlibahis|pusulabet|venusbet|truvabet|showbahis|evetabi|reklam|sponsor|728x90|468x60|300x250|300x600|160x600|970x90|970x250)/i;
@@ -642,8 +643,21 @@
 
     if (isCosmeticActive) {
       injectStyle(STYLE_ID, `${BASE_SELECTOR}${hideCss}\n${STEALTH_SELECTOR}${stealthCss}`);
+      chrome.runtime
+        .sendMessage({ type: "GET_SITE_COSMETICS", domain: hostname })
+        .then((res) => {
+          removeStyle(COMMUNITY_COSMETIC_STYLE_ID);
+          if (res?.selectors && res.selectors.length > 0 && isCosmeticActive) {
+            injectStyle(
+              COMMUNITY_COSMETIC_STYLE_ID,
+              `${res.selectors.join(", ")}${hideCss}`
+            );
+          }
+        })
+        .catch(() => {});
     } else {
       removeStyle(STYLE_ID);
+      removeStyle(COMMUNITY_COSMETIC_STYLE_ID);
     }
 
     if (isAggressiveActive) {

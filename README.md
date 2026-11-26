@@ -4,7 +4,8 @@ Microsoft Edge (Chromium) için **Manifest V3** mimarisiyle geliştirilmiş hız
 
 ## Özellikler
 
-- **Ağ Seviyesinde Engelleme (`declarativeNetRequest`):** 3.800+ reklam, takipçi, video-barındırma ve forum reklam ağı kuralı (Peter Lowe topluluk listesi + özel video/pop-up ağları).
+- **Ağ Seviyesinde Engelleme (`declarativeNetRequest`):** **17.100+** reklam, takipçi, video-barındırma ve Türk sitesi kuralı (EasyList + uBlock Origin Filters/Quick Fixes + AdGuard Türkçe + Peter Lowe topluluk listesi). `node scripts/build-lists.js` ile tek komutta güncellenebilir.
+- **Site Bazlı Kozmetik Kurallar:** uBlock Origin ve AdGuard Türkçe listelerinden derlenmiş **4.800+** siteye özel kozmetik gizleme kuralı (`rules/site_cosmetics.json`).
 - **Agresif Mod:** 60 ek agresif ağ kuralı (video reklamları, pop-under, bildirim spamı, çerez/CMP katmanları ve üçüncü parti genel reklam yolları), genişletilmiş kozmetik gizleme ve YouTube otomatik reklam atlama/hızlandırma.
 - **Pop-up & Yan Sekme Koruması:** Video oynatıcılara tıklayınca açılan yan reklam sekmelerini (`window.open`, gizli `_blank` tıklamaları, görünmez tıklama katmanları) ve mevcut sekmeyi reklama çevirip 2. sekmeye atan pop-under hilelerini engeller.
 - **Anti-Tespit (Stealth) Koruması:** Tuzak reklam betiklerini sertçe engellemek yerine yerel boş stub dosyalarına (`200 OK`) yönlendirir, `offsetHeight === 0` tuzaklarını ekran dışı gizlemeyle atlatır ve anti-adblock JS kontrollerini (`canRunAds`, `blockAdBlock`, `[native code]`) maskeler.

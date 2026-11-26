@@ -60,6 +60,33 @@ const CUSTOM_BLOCK_RULE_START = 20000;
 const tabBlockedCounts = new Map();
 const recentSpawnedTabs = new Map();
 const lastVideoClickByTab = new Map();
+let siteCosmeticsCache = null;
+
+async function getSiteCosmeticsMap() {
+  if (siteCosmeticsCache) return siteCosmeticsCache;
+  try {
+    const res = await fetch(chrome.runtime.getURL("rules/site_cosmetics.json"));
+    siteCosmeticsCache = await res.json();
+  } catch {
+    siteCosmeticsCache = {};
+  }
+  return siteCosmeticsCache;
+}
+
+async function getCosmeticsForDomain(hostname) {
+  if (!hostname) return [];
+  const map = await getSiteCosmeticsMap();
+  const clean = hostname.replace(/^www\./, "").toLowerCase();
+  const parts = clean.split(".");
+  const selectors = [];
+  for (let i = 0; i <= parts.length - 2; i++) {
+    const candidate = parts.slice(i).join(".");
+    if (Array.isArray(map[candidate])) {
+      selectors.push(...map[candidate]);
+    }
+  }
+  return selectors;
+}
 
 function isPopupAdUrl(url) {
   if (!url || typeof url !== "string") return false;
@@ -117,9 +144,21 @@ async function syncRules(settings) {
   const disableRulesetIds = [];
 
   if (settings.enabled && settings.blockAds) {
-    enableRulesetIds.push("ruleset_ads", "ruleset_community");
+    enableRulesetIds.push(
+      "ruleset_ads",
+      "ruleset_community",
+      "ruleset_ublock",
+      "ruleset_turkish",
+      "ruleset_easylist"
+    );
   } else {
-    disableRulesetIds.push("ruleset_ads", "ruleset_community");
+    disableRulesetIds.push(
+      "ruleset_ads",
+      "ruleset_community",
+      "ruleset_ublock",
+      "ruleset_turkish",
+      "ruleset_easylist"
+    );
   }
 
   if (settings.enabled && settings.blockTrackers) {
@@ -463,6 +502,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.storage.local.set(updated);
         await syncRules(updated);
         sendResponse({ ok: true, settings: updated });
+        break;
+      }
+
+      case "GET_SITE_COSMETICS": {
+        const selectors = await getCosmeticsForDomain(message.domain);
+        sendResponse({ selectors });
         break;
       }
 
