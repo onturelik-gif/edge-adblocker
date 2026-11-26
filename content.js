@@ -97,6 +97,11 @@
     "ytd-in-feed-ad-layout-renderer",
     "ytd-action-companion-ad-renderer",
     "ytd-enforcement-message-view-model",
+    "ytd-rich-item-renderer:has(ytd-ad-slot-renderer)",
+    "ytd-rich-item-renderer:has(ytd-in-feed-ad-layout-renderer)",
+    "ytd-rich-item-renderer:has(ytd-display-ad-renderer)",
+    "ytd-rich-section-renderer:has(ytd-ad-slot-renderer)",
+    "ytd-rich-section-renderer:has(ytd-banner-promo-renderer)",
     "#player-ads"
   ];
 
