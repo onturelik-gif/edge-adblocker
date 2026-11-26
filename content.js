@@ -246,6 +246,20 @@
     }
   }
 
+  const LOCKED_AD_STYLE_ID = "edgeshield-locked-ad-style";
+  const lockedAdSelectors = new Set();
+
+  function lockAdSelector(el) {
+    const sel = buildCssSelector(el);
+    if (!sel || lockedAdSelectors.has(sel)) return;
+    lockedAdSelectors.add(sel);
+    removeStyle(LOCKED_AD_STYLE_ID);
+    injectStyle(
+      LOCKED_AD_STYLE_ID,
+      `${Array.from(lockedAdSelectors).join(", ")} { display: none !important; visibility: hidden !important; pointer-events: none !important; opacity: 0 !important; width: 0 !important; height: 0 !important; }`
+    );
+  }
+
   function dismissInPlayerAdOverlays() {
     if (!isAggressiveActive || !document.body) return;
     const CLOSE_AD_RE =
@@ -259,13 +273,6 @@
         const text = (el.textContent || "").trim();
         if (!text || text.length > 22) continue;
         if (!CLOSE_AD_RE.test(text)) continue;
-
-        const rect = el.getBoundingClientRect();
-        if (rect.width === 0 && rect.height === 0) continue;
-
-        try {
-          el.click();
-        } catch {}
 
         // Climb to the highest ancestor that does NOT contain a <video> element (the exact ad overlay wrapper)
         let overlay = el;
@@ -281,16 +288,16 @@
         }
 
         if (overlay && overlay !== document.body && overlay !== document.documentElement) {
-          overlay.style.setProperty("display", "none", "important");
-          overlay.style.setProperty("pointer-events", "none", "important");
+          lockAdSelector(overlay);
+          overlay.remove();
         } else {
-          el.style.setProperty("display", "none", "important");
+          try {
+            el.click();
+          } catch {}
+          el.remove();
         }
 
-        if (!el.dataset.edgeshieldCloseCounted) {
-          el.dataset.edgeshieldCloseCounted = "1";
-          dismissed += 1;
-        }
+        dismissed += 1;
       }
     } catch {}
 
@@ -638,7 +645,7 @@
       window.addEventListener("load", scanAndReport, { once: true });
       startObserver();
       if (isAggressiveActive && window.self !== window.top && !iframeAdTimer) {
-        iframeAdTimer = setInterval(dismissInPlayerAdOverlays, 750);
+        iframeAdTimer = setInterval(dismissInPlayerAdOverlays, 300);
       }
     } else {
       stopObserver();
