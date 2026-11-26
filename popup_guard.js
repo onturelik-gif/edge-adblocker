@@ -163,19 +163,77 @@
     return false;
   }
 
+  function maskAsNative(fn, name) {
+    try {
+      Object.defineProperty(fn, "toString", {
+        value: () => `function ${name}() { [native code] }`,
+        configurable: true
+      });
+    } catch {}
+    return fn;
+  }
+
+  // Anti-adblock JS bait defuser (runs at document_start)
+  (function defuseAntiAdblock() {
+    try {
+      const defineReadOnly = (obj, prop, val) => {
+        try {
+          Object.defineProperty(obj, prop, {
+            get: () => val,
+            set: () => {},
+            configurable: true
+          });
+        } catch {}
+      };
+
+      defineReadOnly(window, "canRunAds", true);
+      defineReadOnly(window, "isAdBlockActive", false);
+      defineReadOnly(window, "adblockDetected", false);
+      defineReadOnly(window, "adBlockDetected", false);
+
+      const fakeDetector = {
+        onDetected() {
+          return this;
+        },
+        onNotDetected(fn) {
+          if (typeof fn === "function") setTimeout(fn, 1);
+          return this;
+        },
+        on(detected, fn) {
+          if (!detected && typeof fn === "function") setTimeout(fn, 1);
+          return this;
+        },
+        setOption() {
+          return this;
+        },
+        check() {
+          return false;
+        },
+        emitEvent() {
+          return this;
+        },
+        clearEvent() {}
+      };
+
+      for (const key of ["fuckAdBlock", "blockAdBlock", "sniffAdBlock"]) {
+        defineReadOnly(window, key, fakeDetector);
+      }
+    } catch {}
+  })();
+
   // 1. Intercept window.open
   const nativeOpen = window.open;
-  window.open = function (url) {
+  window.open = maskAsNative(function open(url) {
     if (shouldBlockPopup(url)) {
       notifyBlocked();
       return createFakeWindow();
     }
     return nativeOpen.apply(this, arguments);
-  };
+  }, "open");
 
   // 2. Intercept synthetic hidden/detached <a target="_blank"> clicks
   const nativeAnchorClick = HTMLAnchorElement.prototype.click;
-  HTMLAnchorElement.prototype.click = function () {
+  HTMLAnchorElement.prototype.click = maskAsNative(function click() {
     if (isGuardActive()) {
       const target = (this.getAttribute("target") || "").toLowerCase();
       const href = this.href || "";
@@ -189,11 +247,11 @@
       }
     }
     return nativeAnchorClick.apply(this, arguments);
-  };
+  }, "click");
 
   // 3. Intercept <form target="_blank"> ad submissions
   const nativeFormSubmit = HTMLFormElement.prototype.submit;
-  HTMLFormElement.prototype.submit = function () {
+  HTMLFormElement.prototype.submit = maskAsNative(function submit() {
     if (isGuardActive()) {
       const target = (this.getAttribute("target") || "").toLowerCase();
       const action = this.getAttribute("action") || "";
@@ -203,7 +261,7 @@
       }
     }
     return nativeFormSubmit.apply(this, arguments);
-  };
+  }, "submit");
 
   // 4. Intercept real user clicks on invisible/empty <a target="_blank"> overlays over video players
   document.addEventListener(

@@ -2,9 +2,23 @@
   const STYLE_ID = "edgeshield-cosmetic-style";
   const AGGRESSIVE_STYLE_ID = "edgeshield-aggressive-style";
 
-  const COSMETIC_SELECTORS = [
+  // Bait-prone generic selectors hidden off-screen so offsetHeight stays > 0 (defeats anti-adblock checks)
+  const STEALTH_HIDE_SELECTORS = [
     "ins.adsbygoogle",
     ".adsbygoogle",
+    ".ad-banner",
+    ".ad-container",
+    ".ad-wrapper",
+    ".ad-placeholder",
+    ".ad-slot",
+    ".ad_slot",
+    ".ad-unit",
+    ".ad-box",
+    ".ad_box",
+    ".ad_container"
+  ];
+
+  const COSMETIC_SELECTORS = [
     "[id^='google_ads_iframe']",
     "[id^='div-gpt-ad']",
     "[data-ad-slot]",
@@ -27,10 +41,6 @@
     "iframe[src*='outbrain.com']",
     "iframe[src*='reklamstore.com']",
     "iframe[src*='admatic.com.tr']",
-    ".ad-banner",
-    ".ad-container",
-    ".ad-wrapper",
-    ".ad-placeholder",
     ".sponsored-ad",
     ".reklam-alani",
     ".reklam_alani",
@@ -42,12 +52,6 @@
     "amp-ad",
     "amp-sticky-ad",
     "amp-auto-ads",
-    ".ad-slot",
-    ".ad_slot",
-    ".ad-unit",
-    ".ad-box",
-    ".ad_box",
-    ".ad_container",
     "[id^='ad-container']",
     "[id^='ad_container']",
     "[id^='ad-slot']",
@@ -84,6 +88,7 @@
     "#player-ads"
   ];
 
+  const STEALTH_SELECTOR = STEALTH_HIDE_SELECTORS.join(", ");
   const BASE_SELECTOR = COSMETIC_SELECTORS.join(", ");
   const AGGRESSIVE_SELECTOR = AGGRESSIVE_SELECTORS.join(", ");
 
@@ -251,9 +256,11 @@
 
     const hideCss =
       " { display: none !important; visibility: hidden !important; height: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }";
+    const stealthCss =
+      " { opacity: 0 !important; pointer-events: none !important; position: fixed !important; left: -99999px !important; top: -99999px !important; z-index: -1 !important; }";
 
     if (isCosmeticActive) {
-      injectStyle(STYLE_ID, `${BASE_SELECTOR}${hideCss}`);
+      injectStyle(STYLE_ID, `${BASE_SELECTOR}${hideCss}\n${STEALTH_SELECTOR}${stealthCss}`);
     } else {
       removeStyle(STYLE_ID);
     }

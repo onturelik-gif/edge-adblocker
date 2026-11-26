@@ -133,6 +133,12 @@ async function syncRules(settings) {
     disableRulesetIds.push("ruleset_aggressive");
   }
 
+  if (settings.enabled) {
+    enableRulesetIds.push("ruleset_stealth");
+  } else {
+    disableRulesetIds.push("ruleset_stealth");
+  }
+
   await chrome.declarativeNetRequest.updateEnabledRulesets({
     enableRulesetIds,
     disableRulesetIds
