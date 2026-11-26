@@ -868,11 +868,11 @@
     }
   }
 
-  // Tell background when user clicks on a video player / non-link so rogue spawned tabs can be closed immediately
+  // Tell background when user left-clicks on a video player / non-link so rogue spawned tabs can be closed immediately
   document.addEventListener(
     "pointerdown",
     (e) => {
-      if (!isPopGuardActive) return;
+      if (!isPopGuardActive || e.button !== 0) return;
       const el = e.target;
       if (!(el instanceof Element)) return;
 

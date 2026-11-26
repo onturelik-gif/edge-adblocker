@@ -38,6 +38,13 @@ const POPUP_AD_PATTERNS = [
 ];
 
 const SAFE_NEW_TAB_PATTERNS = [
+  /google\.[a-z.]+\/search/i,
+  /translate\.google\./i,
+  /bing\.com\/search/i,
+  /duckduckgo\.com/i,
+  /yandex\.[a-z.]+\/search/i,
+  /search\.yahoo\.com/i,
+  /wikipedia\.org/i,
   /youtube\.com/i,
   /youtu\.be/i,
   /vimeo\.com/i,
