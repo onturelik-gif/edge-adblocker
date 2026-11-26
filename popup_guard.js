@@ -219,11 +219,53 @@
         defineReadOnly(window, key, fakeDetector);
       }
 
-      // Stealth fetch wrapper: if a bait ad/tracker fetch fails due to network blocking, return synthetic 200 OK
+      // Stealth fetch wrapper + YouTube player JSON ad-stripper
       if (typeof window.fetch === "function") {
         const nativeFetch = window.fetch.bind(window);
         const BAIT_FETCH_RE =
           /(ads|adserver|adservice|pagead|googlesyndication|doubleclick|popads|popcash|propeller|adsterra|exoclick|monetag|clickadu|hilltopads|adcash|admaven|prebid|reklam|adblock|analytics|tracker)/i;
+        const isYouTube =
+          location.hostname === "youtube.com" ||
+          location.hostname.endsWith(".youtube.com");
+
+        const stripYouTubeAds = (obj) => {
+          if (!obj || typeof obj !== "object") return obj;
+          let stripped = false;
+          for (const key of [
+            "adPlacements",
+            "playerAds",
+            "adSlots",
+            "adBreakHeartbeatParams"
+          ]) {
+            if (key in obj) {
+              delete obj[key];
+              stripped = true;
+            }
+          }
+          if (stripped) notifyBlocked();
+          return obj;
+        };
+
+        if (isYouTube) {
+          let ytPlayerResp = window.ytInitialPlayerResponse;
+          if (ytPlayerResp && typeof ytPlayerResp === "object") {
+            stripYouTubeAds(ytPlayerResp);
+          }
+          try {
+            Object.defineProperty(window, "ytInitialPlayerResponse", {
+              configurable: true,
+              get() {
+                return ytPlayerResp;
+              },
+              set(val) {
+                ytPlayerResp =
+                  isGuardActive() && val && typeof val === "object"
+                    ? stripYouTubeAds(val)
+                    : val;
+              }
+            });
+          } catch {}
+        }
 
         window.fetch = maskAsNative(function fetch(input, init) {
           const urlStr =
@@ -232,7 +274,35 @@
               : input && typeof input.url === "string"
               ? input.url
               : "";
-          return nativeFetch(input, init).catch((err) => {
+
+          const promise = nativeFetch(input, init);
+
+          if (
+            isYouTube &&
+            isGuardActive() &&
+            urlStr &&
+            /\/youtubei\/v1\/player/i.test(urlStr)
+          ) {
+            return promise.then(async (res) => {
+              try {
+                const clone = res.clone();
+                const data = await clone.json();
+                stripYouTubeAds(data);
+                const headers = new Headers(res.headers);
+                headers.delete("content-length");
+                headers.delete("content-encoding");
+                return new Response(JSON.stringify(data), {
+                  status: res.status,
+                  statusText: res.statusText,
+                  headers
+                });
+              } catch {
+                return res;
+              }
+            });
+          }
+
+          return promise.catch((err) => {
             if (isGuardActive() && urlStr && BAIT_FETCH_RE.test(urlStr)) {
               return new Response("/* ok */", {
                 status: 200,

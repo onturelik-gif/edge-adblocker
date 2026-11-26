@@ -91,6 +91,7 @@
     "ytd-display-ad-renderer",
     "ytd-in-feed-ad-layout-renderer",
     "ytd-action-companion-ad-renderer",
+    "ytd-enforcement-message-view-model",
     "#player-ads"
   ];
 
@@ -144,17 +145,35 @@
     }
   }
 
+  let ytMutedByUs = false;
+  let ytSpedUpByUs = false;
+
   function handleYouTubeAds() {
     if (!isAggressiveActive) return;
     const host = getCurrentHostname();
     if (host !== "youtube.com" && !host.endsWith(".youtube.com")) return;
 
     const player = document.querySelector("#movie_player");
-    const isAdShowing = player && player.classList.contains("ad-showing");
-    if (!isAdShowing) return;
+    const video = document.querySelector("video.html5-main-video");
+    const isAdShowing =
+      Boolean(player && (player.classList.contains("ad-showing") || player.classList.contains("ad-interrupting")));
+
+    if (!isAdShowing) {
+      if (video) {
+        if (ytSpedUpByUs) {
+          video.playbackRate = 1;
+          ytSpedUpByUs = false;
+        }
+        if (ytMutedByUs) {
+          video.muted = false;
+          ytMutedByUs = false;
+        }
+      }
+      return;
+    }
 
     const skipBtn = document.querySelector(
-      ".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern"
+      ".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-slot button"
     );
     if (skipBtn) {
       skipBtn.click();
@@ -164,10 +183,20 @@
       return;
     }
 
-    const video = document.querySelector("video.html5-main-video");
-    if (video && Number.isFinite(video.duration) && video.duration > 0) {
-      video.muted = true;
-      video.currentTime = Math.max(0, video.duration - 0.1);
+    if (video) {
+      if (!video.muted) {
+        video.muted = true;
+        ytMutedByUs = true;
+      }
+      if (video.playbackRate < 16) {
+        try {
+          video.playbackRate = 16;
+          ytSpedUpByUs = true;
+        } catch {}
+      }
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        video.currentTime = Math.max(0, video.duration - 0.05);
+      }
     }
   }
 
@@ -175,7 +204,7 @@
     const host = getCurrentHostname();
     if (host !== "youtube.com" && !host.endsWith(".youtube.com")) return;
     if (ytTimer) return;
-    ytTimer = setInterval(handleYouTubeAds, 400);
+    ytTimer = setInterval(handleYouTubeAds, 150);
   }
 
   function stopYouTubeWatcher() {
