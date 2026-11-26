@@ -48,6 +48,14 @@
     "iframe[src*='outbrain.com']",
     "iframe[src*='reklamstore.com']",
     "iframe[src*='admatic.com.tr']",
+    "iframe[src*='trafficjunky']",
+    "iframe[src*='adtng.com']",
+    "iframe[src*='exosrv.com']",
+    "iframe[src*='tjstatic.com']",
+    "a[href*='trafficjunky']",
+    "a[href*='adtng.com']",
+    "a[href*='exoclick.com']",
+    "a[href*='juicyads.com']",
     ".sponsored-ad",
     ".reklam-alani",
     ".reklam_alani",
@@ -319,13 +327,44 @@
   function hideAdBadgedCards() {
     if (!isAggressiveActive || !document.body) return;
     const BADGE_RE = /^(ad|ads|reklam|ad by .+|ads by .+)$/i;
+    const IFRAME_AD_TEXT_RE = /(traffic\s*junky|ad\s+by\s+|ads\s+by\s+|exoclick|juicyads|adsterra)/i;
     let hiddenCount = 0;
 
+    // 1. Inspect accessible same-origin / about:blank / srcdoc iframes from parent page
+    try {
+      const iframes = document.querySelectorAll("iframe");
+      for (const frame of iframes) {
+        if (frame.dataset.edgeshieldAdFrameHidden) continue;
+        try {
+          const doc = frame.contentDocument;
+          if (!doc || !doc.body) continue;
+          if (doc.querySelector("video")) continue;
+          const html = doc.body.innerHTML || "";
+          const txt = doc.body.innerText || "";
+          if (
+            IFRAME_AD_TEXT_RE.test(txt) ||
+            /trafficjunky|adtng\.com|exosrv\.com|tjstatic\.com/i.test(html)
+          ) {
+            frame.dataset.edgeshieldAdFrameHidden = "1";
+            frame.style.setProperty("display", "none", "important");
+            frame.style.setProperty("pointer-events", "none", "important");
+            frame.style.setProperty("height", "0", "important");
+            frame.style.setProperty("width", "0", "important");
+            collapseEmptyAdAncestors(frame);
+            hiddenCount += 1;
+          }
+        } catch {
+          // Cross-origin iframe; handled by content.js running inside that iframe
+        }
+      }
+    } catch {}
+
+    // 2. Scan for Ad / Ad By ... badge elements in current document
     try {
       const nodes = document.querySelectorAll("span, div, a, small, label");
       for (const el of nodes) {
         if (el.dataset.edgeshieldBadgeChecked) continue;
-        if (el.children.length > 0) continue;
+        if (el.children.length > 2) continue;
         const text = (el.textContent || "").trim();
         if (!text || text.length > 32 || !BADGE_RE.test(text)) continue;
 
@@ -809,7 +848,10 @@
       window.addEventListener("load", scanAndReport, { once: true });
       startObserver();
       if (isAggressiveActive && window.self !== window.top && !iframeAdTimer) {
-        iframeAdTimer = setInterval(dismissInPlayerAdOverlays, 300);
+        iframeAdTimer = setInterval(() => {
+          dismissInPlayerAdOverlays();
+          hideAdBadgedCards();
+        }, 300);
       }
     } else {
       stopObserver();
