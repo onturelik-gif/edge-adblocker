@@ -4,15 +4,48 @@ const DEFAULT_SETTINGS = {
   blockTrackers: true,
   cosmeticFiltering: true,
   aggressiveMode: true,
+  blockPopups: true,
   whitelist: [],
   customBlocked: [],
   totalBlocked: 0
 };
 
+const POPUP_AD_PATTERNS = [
+  /popads/i,
+  /popcash/i,
+  /propellerads/i,
+  /adsterra/i,
+  /clickadu/i,
+  /monetag/i,
+  /exoclick/i,
+  /hilltopads/i,
+  /adcash/i,
+  /admaven/i,
+  /trafficjunky/i,
+  /juicyads/i,
+  /galaksion/i,
+  /evadav/i,
+  /onclickalgo/i,
+  /richpush/i,
+  /reklamstore/i,
+  /admatic/i,
+  /doubleclick\.net/i,
+  /googlesyndication\.com/i,
+  /popunder/i,
+  /\/afu\.php/i,
+  /\/go\.php/i
+];
+
 const WHITELIST_RULE_START = 10000;
 const CUSTOM_BLOCK_RULE_START = 20000;
 
 const tabBlockedCounts = new Map();
+const recentSpawnedTabs = new Map();
+
+function isPopupAdUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  return POPUP_AD_PATTERNS.some((re) => re.test(url));
+}
 
 function normalizeDomain(input) {
   if (!input || typeof input !== "string") return "";
@@ -187,14 +220,75 @@ if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
   });
 }
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === "loading" && changeInfo.url) {
     tabBlockedCounts.set(tabId, 0);
   }
+
+  if (changeInfo.url) {
+    const now = Date.now();
+    const spawned = recentSpawnedTabs.get(tabId);
+    if (spawned && now - spawned.createdAt < 4000) {
+      if (isPopupAdUrl(changeInfo.url)) {
+        recentSpawnedTabs.delete(tabId);
+        chrome.tabs.remove(tabId).catch(() => {});
+        chrome.tabs.update(spawned.sourceTabId, { active: true }).catch(() => {});
+        incrementBlocked(spawned.sourceTabId, 1);
+        return;
+      }
+    }
+
+    // Pop-under reversal: if source tab spawned a clone of itself and then redirected to another domain (ad), close the ad tab
+    for (const [childTabId, info] of recentSpawnedTabs.entries()) {
+      if (
+        info.sourceTabId === tabId &&
+        info.sameUrlAsSource &&
+        now - info.createdAt < 2500
+      ) {
+        const prevHost = getHostnameFromUrl(info.sourceUrl);
+        const nextHost = getHostnameFromUrl(changeInfo.url);
+        if (prevHost && nextHost && prevHost !== nextHost) {
+          recentSpawnedTabs.delete(childTabId);
+          chrome.tabs.remove(tabId).catch(() => {});
+          chrome.tabs.update(childTabId, { active: true }).catch(() => {});
+          incrementBlocked(childTabId, 1);
+          return;
+        }
+      }
+    }
+  }
+
   if (changeInfo.status === "loading" || changeInfo.status === "complete") {
     updateBadgeForTab(tabId, tab.url);
   }
 });
+
+if (chrome.webNavigation && chrome.webNavigation.onCreatedNavigationTarget) {
+  chrome.webNavigation.onCreatedNavigationTarget.addListener(async (details) => {
+    const settings = await getSettings();
+    if (!settings.enabled || !settings.blockPopups) return;
+
+    const sourceTab = await chrome.tabs.get(details.sourceTabId).catch(() => null);
+    if (!sourceTab?.url) return;
+
+    const sourceHost = getHostnameFromUrl(sourceTab.url);
+    if (isDomainWhitelisted(sourceHost, settings.whitelist)) return;
+
+    if (isPopupAdUrl(details.url)) {
+      chrome.tabs.remove(details.tabId).catch(() => {});
+      chrome.tabs.update(details.sourceTabId, { active: true }).catch(() => {});
+      incrementBlocked(details.sourceTabId, 1);
+      return;
+    }
+
+    recentSpawnedTabs.set(details.tabId, {
+      sourceTabId: details.sourceTabId,
+      sourceUrl: sourceTab.url,
+      sameUrlAsSource: details.url === sourceTab.url,
+      createdAt: Date.now()
+    });
+  });
+}
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   try {
@@ -207,6 +301,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabBlockedCounts.delete(tabId);
+  recentSpawnedTabs.delete(tabId);
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

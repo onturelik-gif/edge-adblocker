@@ -234,6 +234,15 @@
 
     isCosmeticActive = allowed && Boolean(settings.cosmeticFiltering);
     isAggressiveActive = allowed && Boolean(settings.aggressiveMode);
+    const isPopGuardActive = allowed && Boolean(settings.blockPopups);
+
+    if (document.documentElement) {
+      if (isPopGuardActive) {
+        document.documentElement.setAttribute("data-edgeshield-popguard", "1");
+      } else {
+        document.documentElement.removeAttribute("data-edgeshield-popguard");
+      }
+    }
 
     const hideCss =
       " { display: none !important; visibility: hidden !important; height: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }";
@@ -270,8 +279,15 @@
     enabled: true,
     cosmeticFiltering: true,
     aggressiveMode: true,
+    blockPopups: true,
     whitelist: []
   };
+
+  window.addEventListener("edgeshield-popup-blocked", () => {
+    chrome.runtime
+      .sendMessage({ type: "COSMETIC_BLOCKED", count: 1 })
+      .catch(() => {});
+  });
 
   chrome.storage.local.get(STORAGE_KEYS, (settings) => {
     applyState(settings);
@@ -283,6 +299,7 @@
       changes.enabled ||
       changes.cosmeticFiltering ||
       changes.aggressiveMode ||
+      changes.blockPopups ||
       changes.whitelist
     ) {
       chrome.storage.local.get(STORAGE_KEYS, (settings) => {
