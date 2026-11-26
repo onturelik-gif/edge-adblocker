@@ -5,7 +5,8 @@
 
   const BETTING_AD_RE =
     /(bet\b|bahis|casino|slot|bonus|jackpot|poker|rulet|freespin|denemebonus|canlibahis|pusulabet|venusbet|truvabet|showbahis|evetabi|reklam|sponsor|728x90|468x60|300x250|300x600|160x600|970x90|970x250)/i;
-  const REDIRECT_PATH_RE = /(\/go\/|\/out\/|\/git\/|\/click\/|\/redirect|\/partner|\/aff)/i;
+  const REDIRECT_PATH_RE =
+    /(\/go\/|\/out\/|\/git\/|\/click\/|\/redirect|\/partner|\/aff|\/r\/|bit\.ly|cutt\.ly|t\.ly|tinyurl|rebrand\.ly|rb\.gy|is\.gd|heylink\.me|linktr\.ee)/i;
 
   // Bait-prone generic selectors hidden off-screen so offsetHeight stays > 0 (defeats anti-adblock checks)
   const STEALTH_HIDE_SELECTORS = [
@@ -221,18 +222,25 @@
     try {
       const anchors = document.querySelectorAll("a[href]");
       for (const a of anchors) {
-        if (a.dataset.edgeshieldBannerChecked) continue;
-        a.dataset.edgeshieldBannerChecked = "1";
-
+        if (a.dataset.edgeshieldBannerHidden) continue;
         if (a.closest("nav, header")) continue;
-        const media = a.querySelector("img, video, picture");
-        if (!media) continue;
+
+        const media = a.querySelector("img, video, picture, canvas");
+        const style = getComputedStyle(a);
+        const hasBgImage =
+          style.backgroundImage && style.backgroundImage !== "none";
+        if (!media && !hasBgImage) continue;
 
         const href = a.href || "";
         const rel = (a.getAttribute("rel") || "").toLowerCase();
         const target = (a.getAttribute("target") || "").toLowerCase();
-        const imgSrc = media.getAttribute("src") || media.getAttribute("data-src") || "";
-        const imgAlt = media.getAttribute("alt") || "";
+        const imgSrc = media
+          ? media.getAttribute("src") ||
+            media.getAttribute("data-src") ||
+            media.getAttribute("data-lazy-src") ||
+            ""
+          : style.backgroundImage;
+        const imgAlt = media ? media.getAttribute("alt") || "" : "";
 
         const isCrossOrigin = (() => {
           try {
@@ -247,13 +255,46 @@
           BETTING_AD_RE.test(imgSrc) ||
           BETTING_AD_RE.test(imgAlt);
 
-        const isSponsoredRedirect =
-          (target === "_blank" || rel.includes("sponsored") || rel.includes("nofollow")) &&
-          (REDIRECT_PATH_RE.test(href) || isCrossOrigin) &&
-          (matchesBetOrAd || /\.gif(\?|$)/i.test(imgSrc));
+        const isExternalOrBlank =
+          target === "_blank" ||
+          target === "_new" ||
+          isCrossOrigin ||
+          rel.includes("sponsored") ||
+          rel.includes("nofollow");
 
-        if (matchesBetOrAd || isSponsoredRedirect) {
+        const isSponsoredRedirect =
+          isExternalOrBlank &&
+          (REDIRECT_PATH_RE.test(href) || /\.gif(\?|$)/i.test(imgSrc));
+
+        // Wide horizontal image-only banner heuristic (catches self-hosted casino/betting banners with random URLs)
+        const rect = (media || a).getBoundingClientRect();
+        const isEmptyText = a.textContent.trim().length <= 2;
+        const isWideBannerShape =
+          rect.width >= 260 &&
+          rect.height >= 40 &&
+          rect.height <= 165 &&
+          rect.width / rect.height >= 2.8;
+
+        const isExternalBannerShape =
+          isEmptyText && isWideBannerShape && isExternalOrBlank;
+
+        if (matchesBetOrAd || isSponsoredRedirect || isExternalBannerShape) {
+          a.dataset.edgeshieldBannerHidden = "1";
           a.style.setProperty("display", "none", "important");
+          a.style.setProperty("pointer-events", "none", "important");
+          a.style.setProperty("height", "0", "important");
+          a.style.setProperty("width", "0", "important");
+          // Collapse parent if it only wraps this single banner
+          const parent = a.parentElement;
+          if (
+            parent &&
+            parent !== document.body &&
+            parent.children.length === 1 &&
+            parent.textContent.trim().length <= 2
+          ) {
+            parent.style.setProperty("display", "none", "important");
+            parent.style.setProperty("pointer-events", "none", "important");
+          }
           hiddenCount += 1;
         }
       }
@@ -325,13 +366,25 @@
     document.removeEventListener("keydown", onPickerKeydown, true);
   }
 
+  function resolvePickTarget(el) {
+    if (!el || !(el instanceof Element)) return null;
+    // If user clicked an image/video/span inside an <a> banner, promote to the <a> so the link is also removed
+    const enclosingAnchor = el.closest("a[href]");
+    if (enclosingAnchor && enclosingAnchor !== document.body) {
+      return enclosingAnchor;
+    }
+    return el;
+  }
+
   function onPickerMove(e) {
     if (!pickerActive || !pickerOverlay) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (!el || el === pickerOverlay || el === pickerToolbar || pickerToolbar?.contains(el)) {
+    const raw = document.elementFromPoint(e.clientX, e.clientY);
+    if (!raw || raw === pickerOverlay || raw === pickerToolbar || pickerToolbar?.contains(raw)) {
       return;
     }
-    if (el === document.body || el === document.documentElement) return;
+    if (raw === document.body || raw === document.documentElement) return;
+    const el = resolvePickTarget(raw);
+    if (!el) return;
     pickerHoveredEl = el;
     const rect = el.getBoundingClientRect();
     pickerOverlay.style.left = `${rect.left}px`;
@@ -348,12 +401,15 @@
     e.stopPropagation();
     e.stopImmediatePropagation();
 
-    const target = pickerHoveredEl || e.target;
+    const target = resolvePickTarget(pickerHoveredEl || e.target);
     stopElementPicker();
 
     if (target && target instanceof Element) {
       const selector = buildCssSelector(target);
       target.style.setProperty("display", "none", "important");
+      target.style.setProperty("pointer-events", "none", "important");
+      target.style.setProperty("width", "0", "important");
+      target.style.setProperty("height", "0", "important");
       if (selector) {
         const hostname = getCurrentHostname();
         chrome.runtime
@@ -458,7 +514,7 @@
     }
 
     const hideCss =
-      " { display: none !important; visibility: hidden !important; height: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }";
+      " { display: none !important; visibility: hidden !important; pointer-events: none !important; width: 0 !important; height: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }";
     const stealthCss =
       " { opacity: 0 !important; pointer-events: none !important; position: fixed !important; left: -99999px !important; top: -99999px !important; z-index: -1 !important; }";
 
@@ -493,6 +549,7 @@
       } else {
         scanAndReport();
       }
+      window.addEventListener("load", scanAndReport, { once: true });
       startObserver();
     } else {
       stopObserver();
