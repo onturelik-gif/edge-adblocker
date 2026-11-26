@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EdgeShield AdBlock</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="brand">
+          <div class="logo" id="logoBadge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <path
+                d="M12 2L4 5.5V11.2C4 16.4 7.4 21.1 12 22.5C16.6 21.1 20 16.4 20 11.2V5.5L12 2Z"
+                fill="currentColor"
+                opacity="0.2"
+              />
+              <path
+                d="M12 2L4 5.5V11.2C4 16.4 7.4 21.1 12 22.5C16.6 21.1 20 16.4 20 11.2V5.5L12 2Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M9 12.2L11 14.2L15.5 9.7"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <div>
+            <h1>EdgeShield</h1>
+            <span class="subtitle">AdBlock v1.0</span>
+          </div>
+        </div>
+
+        <label class="power-switch" title="Korumayı aç/kapat">
+          <input type="checkbox" id="globalToggle" />
+          <span class="power-slider"></span>
+        </label>
+      </header>
+
+      <section class="site-card" id="siteCard">
+        <div class="site-info">
+          <span class="site-label">Aktif Site</span>
+          <div class="site-row">
+            <span class="site-domain" id="siteDomain">Yükleniyor...</span>
+            <span class="status-pill" id="statusPill">Korunuyor</span>
+          </div>
+        </div>
+        <button class="btn-whitelist" id="whitelistBtn" disabled>
+          Bu Sitede Duraklat
+        </button>
+      </section>
+
+      <section class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-value" id="pageBlockedCount">0</span>
+          <span class="stat-label">Bu Sayfada</span>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top">
+            <span class="stat-value" id="totalBlockedCount">0</span>
+            <button
+              class="btn-reset"
+              id="resetStatsBtn"
+              title="Toplam sayacı sıfırla"
+            >
+              Sıfırla
+            </button>
+          </div>
+          <span class="stat-label">Toplam Engellenen</span>
+        </div>
+      </section>
+
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="protection" role="tab">
+          Koruma
+        </button>
+        <button class="tab" data-tab="rules" role="tab">Kurallar</button>
+      </nav>
+
+      <main class="tab-content">
+        <section class="panel active" id="panel-protection">
+          <div class="toggle-item">
+            <div class="toggle-text">
+              <strong>Reklam Engelleme</strong>
+              <span>Ağ seviyesinde reklam sunucularını engeller</span>
+            </div>
+            <label class="mini-switch">
+              <input type="checkbox" id="adsToggle" />
+              <span class="mini-slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-item">
+            <div class="toggle-text">
+              <strong>Takipçi Engelleme</strong>
+              <span>Analitik ve izleme betiklerini durdurur</span>
+            </div>
+            <label class="mini-switch">
+              <input type="checkbox" id="trackersToggle" />
+              <span class="mini-slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-item">
+            <div class="toggle-text">
+              <strong>Kozmetik Filtre</strong>
+              <span>Sayfa içi boş reklam kutularını gizler</span>
+            </div>
+            <label class="mini-switch">
+              <input type="checkbox" id="cosmeticToggle" />
+              <span class="mini-slider"></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="panel" id="panel-rules">
+          <form class="add-rule-form" id="addDomainForm">
+            <input
+              type="text"
+              id="customDomainInput"
+              placeholder="Alan adı engelle (ör. reklam.com)"
+              autocomplete="off"
+            />
+            <button type="submit" class="btn-add">Ekle</button>
+          </form>
+          <p class="form-error" id="formError"></p>
+
+          <div class="list-block">
+            <div class="list-header">
+              <span>Özel Engellenenler</span>
+              <span class="badge-count" id="customCount">0</span>
+            </div>
+            <ul class="domain-list" id="customList"></ul>
+          </div>
+
+          <div class="list-block">
+            <div class="list-header">
+              <span>Beyaz Liste (İzin Verilenler)</span>
+              <span class="badge-count" id="whitelistCount">0</span>
+            </div>
+            <ul class="domain-list" id="whitelistList"></ul>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
