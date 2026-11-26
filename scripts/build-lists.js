@@ -11,7 +11,8 @@ const SOURCES = [
     urls: [
       "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/filters.txt",
       "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/quick-fixes.txt",
-      "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/badware.txt"
+      "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/badware.txt",
+      "https://filters.adtidy.org/extension/ublock/filters/2.txt"
     ],
     outFile: "ublock_rules.json",
     startId: 50000,
@@ -94,6 +95,10 @@ function isAscii(str) {
 
 function isValidDomain(d) {
   return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(d);
+}
+
+function isValidCosmeticDomain(d) {
+  return /^[a-z0-9.-]+\.([a-z]{2,}|\*)$/.test(d);
 }
 
 function isPureCssSelector(sel) {
@@ -264,7 +269,7 @@ async function main() {
           const domains = domainsPart
             .split(",")
             .map((d) => d.trim().toLowerCase())
-            .filter((d) => d && !d.startsWith("~") && isValidDomain(d));
+            .filter((d) => d && !d.startsWith("~") && isValidCosmeticDomain(d));
           for (const d of domains) {
             if (!siteCosmetics[d]) siteCosmetics[d] = [];
             if (siteCosmetics[d].length < 25 && !siteCosmetics[d].includes(selector)) {

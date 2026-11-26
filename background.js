@@ -84,6 +84,13 @@ async function getCosmeticsForDomain(hostname) {
     if (Array.isArray(map[candidate])) {
       selectors.push(...map[candidate]);
     }
+    // Also match wildcard TLD entries like "example.*"
+    if (i === parts.length - 2 && parts[i]) {
+      const wildcard = parts[i] + ".*";
+      if (Array.isArray(map[wildcard])) {
+        selectors.push(...map[wildcard]);
+      }
+    }
   }
   return selectors;
 }
