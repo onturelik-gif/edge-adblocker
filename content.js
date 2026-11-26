@@ -318,7 +318,7 @@
 
   function hideAdBadgedCards() {
     if (!isAggressiveActive || !document.body) return;
-    const BADGE_RE = /^(ad|ads|reklam)$/i;
+    const BADGE_RE = /^(ad|ads|reklam|ad by .+|ads by .+)$/i;
     let hiddenCount = 0;
 
     try {
@@ -327,10 +327,18 @@
         if (el.dataset.edgeshieldBadgeChecked) continue;
         if (el.children.length > 0) continue;
         const text = (el.textContent || "").trim();
-        if (!text || text.length > 8 || !BADGE_RE.test(text)) continue;
+        if (!text || text.length > 32 || !BADGE_RE.test(text)) continue;
 
         const rect = el.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0 || rect.width > 75 || rect.height > 32) {
+        if (rect.width === 0 || rect.height === 0 || rect.width > 180 || rect.height > 34) {
+          continue;
+        }
+
+        // If inside a dedicated ad iframe, hide the whole iframe body
+        if (window.self !== window.top && !document.querySelector("video")) {
+          document.documentElement.style.setProperty("display", "none", "important");
+          el.dataset.edgeshieldBadgeChecked = "1";
+          hiddenCount += 1;
           continue;
         }
 
