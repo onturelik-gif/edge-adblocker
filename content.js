@@ -102,6 +102,7 @@
   let observer = null;
   let scanTimer = null;
   let ytTimer = null;
+  let iframeAdTimer = null;
   let isCosmeticActive = false;
   let isAggressiveActive = false;
   let isPopGuardActive = true;
@@ -247,35 +248,49 @@
 
   function dismissInPlayerAdOverlays() {
     if (!isAggressiveActive || !document.body) return;
-    const CLOSE_AD_RE = /^(close ad|reklamı kapat|reklami kapat|skip ad|reklamı atla)\s*[×x✕]?$/i;
+    const CLOSE_AD_RE =
+      /^(close ad|reklamı kapat|reklami kapat|skip ad|reklamı atla)\s*[×x✕]?$/i;
     let dismissed = 0;
 
     try {
       const nodes = document.querySelectorAll("button, a, div, span");
       for (const el of nodes) {
-        if (el.dataset.edgeshieldCloseClicked) continue;
         if (el.children.length > 2) continue;
         const text = (el.textContent || "").trim();
         if (!text || text.length > 22) continue;
         if (!CLOSE_AD_RE.test(text)) continue;
 
-        el.dataset.edgeshieldCloseClicked = "1";
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) continue;
+
         try {
           el.click();
         } catch {}
 
-        // Also hide its immediate positioned overlay container if it remains visible
-        let overlay = el.parentElement;
-        for (let i = 0; i < 4 && overlay && overlay !== document.body; i++) {
-          const st = getComputedStyle(overlay);
-          if (st.position === "absolute" || st.position === "fixed") {
-            overlay.style.setProperty("display", "none", "important");
-            overlay.style.setProperty("pointer-events", "none", "important");
-            break;
-          }
-          overlay = overlay.parentElement;
+        // Climb to the highest ancestor that does NOT contain a <video> element (the exact ad overlay wrapper)
+        let overlay = el;
+        let cur = el.parentElement;
+        while (
+          cur &&
+          cur !== document.body &&
+          cur !== document.documentElement &&
+          !cur.querySelector("video")
+        ) {
+          overlay = cur;
+          cur = cur.parentElement;
         }
-        dismissed += 1;
+
+        if (overlay && overlay !== document.body && overlay !== document.documentElement) {
+          overlay.style.setProperty("display", "none", "important");
+          overlay.style.setProperty("pointer-events", "none", "important");
+        } else {
+          el.style.setProperty("display", "none", "important");
+        }
+
+        if (!el.dataset.edgeshieldCloseCounted) {
+          el.dataset.edgeshieldCloseCounted = "1";
+          dismissed += 1;
+        }
       }
     } catch {}
 
@@ -622,8 +637,15 @@
       }
       window.addEventListener("load", scanAndReport, { once: true });
       startObserver();
+      if (isAggressiveActive && window.self !== window.top && !iframeAdTimer) {
+        iframeAdTimer = setInterval(dismissInPlayerAdOverlays, 750);
+      }
     } else {
       stopObserver();
+      if (iframeAdTimer) {
+        clearInterval(iframeAdTimer);
+        iframeAdTimer = null;
+      }
     }
   }
 
