@@ -37,23 +37,28 @@
     "#reklam-alani"
   ];
 
+  // Safe selectors only (avoid substring *= 'ad-' which breaks #masthead-container, #upload-box, etc.)
   const AGGRESSIVE_SELECTORS = [
     "amp-ad",
     "amp-sticky-ad",
     "amp-auto-ads",
-    "[class*='ad-slot']",
-    "[class*='ad_slot']",
-    "[class*='ad-unit']",
-    "[class*='ad-box']",
-    "[class*='ad-banner']",
+    ".ad-slot",
+    ".ad_slot",
+    ".ad-unit",
+    ".ad-box",
+    ".ad_box",
+    ".ad_container",
+    "[id^='ad-container']",
+    "[id^='ad_container']",
+    "[id^='ad-slot']",
+    "[id^='ad_slot']",
     "[class*='reklam']",
     "[id*='reklam']",
-    "[id*='ad-container']",
-    "[id*='ad_container']",
     "[data-ad]",
     "[data-ads]",
     "[data-ad-unit]",
-    "[data-testid*='ad-']",
+    "[data-testid^='ad-']",
+    "[data-testid^='ads-']",
     ".sticky-ad",
     ".floating-ad",
     ".interstitial-ad",
@@ -87,6 +92,7 @@
   let ytTimer = null;
   let isCosmeticActive = false;
   let isAggressiveActive = false;
+  let isPopGuardActive = true;
 
   function getCurrentHostname() {
     return (window.location.hostname || "").replace(/^www\./, "").toLowerCase();
@@ -234,14 +240,13 @@
 
     isCosmeticActive = allowed && Boolean(settings.cosmeticFiltering);
     isAggressiveActive = allowed && Boolean(settings.aggressiveMode);
-    const isPopGuardActive = allowed && Boolean(settings.blockPopups);
+    isPopGuardActive = allowed && Boolean(settings.blockPopups);
 
     if (document.documentElement) {
-      if (isPopGuardActive) {
-        document.documentElement.setAttribute("data-edgeshield-popguard", "1");
-      } else {
-        document.documentElement.removeAttribute("data-edgeshield-popguard");
-      }
+      document.documentElement.setAttribute(
+        "data-edgeshield-popguard",
+        isPopGuardActive ? "1" : "0"
+      );
     }
 
     const hideCss =
@@ -274,6 +279,34 @@
       stopObserver();
     }
   }
+
+  // Tell background when user clicks on a video player / non-link so rogue spawned tabs can be closed immediately
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (!isPopGuardActive) return;
+      const el = e.target;
+      if (!(el instanceof Element)) return;
+
+      const isVideoArea = Boolean(
+        el.closest(
+          "video, iframe, .vjs-tech, .video-js, .jwplayer, .plyr, [class*='player'], [id*='player']"
+        )
+      );
+      const anchor = el.closest("a[href]");
+      const isEmptyOverlayAnchor =
+        anchor &&
+        anchor.textContent.trim() === "" &&
+        !anchor.querySelector("img, svg");
+
+      if (isVideoArea || isEmptyOverlayAnchor || !anchor) {
+        chrome.runtime
+          .sendMessage({ type: "USER_VIDEO_CLICK" })
+          .catch(() => {});
+      }
+    },
+    true
+  );
 
   const STORAGE_KEYS = {
     enabled: true,

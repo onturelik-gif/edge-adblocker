@@ -55,17 +55,9 @@
     true
   );
 
-  document.addEventListener(
-    "click",
-    (e) => {
-      lastUserClickTarget = e.target;
-      lastUserClickTime = Date.now();
-    },
-    true
-  );
-
+  // Active by default until content.js explicitly sets "0" (disabled/whitelisted)
   function isGuardActive() {
-    return document.documentElement?.getAttribute(ATTR_GUARD) === "1";
+    return document.documentElement?.getAttribute(ATTR_GUARD) !== "0";
   }
 
   function notifyBlocked() {
@@ -116,15 +108,30 @@
     return AD_POPUP_PATTERNS.some((re) => re.test(urlStr));
   }
 
+  function isInsideIframe() {
+    try {
+      return window.self !== window.top;
+    } catch {
+      return true;
+    }
+  }
+
   function clickedOnVideoOrNonLink() {
     if (Date.now() - lastUserClickTime > 1500) return true;
     const el = lastUserClickTarget;
     if (!el || !(el instanceof Element)) return true;
-    if (el.closest("video, .vjs-tech, .jwplayer, .plyr, [class*='player']")) {
+    if (
+      el.closest(
+        "video, .vjs-tech, .video-js, .jwplayer, .plyr, [class*='player'], [id*='player']"
+      )
+    ) {
       return true;
     }
     const anchor = el.closest("a[href]");
     if (!anchor) return true;
+    if (anchor.textContent.trim() === "" && !anchor.querySelector("img, svg")) {
+      return true;
+    }
     return false;
   }
 
@@ -134,9 +141,8 @@
     const urlStr = rawUrl == null ? "" : String(rawUrl).trim();
     if (urlStr && isSafeAuthUrl(urlStr)) return false;
 
-    // Classic pop-under setup: window.open("") or window.open("about:blank")
     if (!urlStr || urlStr === "about:blank") {
-      return clickedOnVideoOrNonLink();
+      return isInsideIframe() || clickedOnVideoOrNonLink();
     }
 
     if (isKnownAdUrl(urlStr)) return true;
@@ -144,14 +150,13 @@
     const parsed = resolveUrl(urlStr);
     if (!parsed) return true;
 
-    // Classic pop-under trick: site opens its own current URL in tab 2 and redirects tab 1 to ad
+    // Pop-under trick: site opens its own current URL in tab 2 and redirects tab 1 to ad
     if (parsed.href === window.location.href) {
       return true;
     }
 
-    // Cross-origin popup triggered from a video or non-link click
     const isCrossOrigin = parsed.origin !== window.location.origin;
-    if (isCrossOrigin && clickedOnVideoOrNonLink()) {
+    if (isCrossOrigin && (isInsideIframe() || clickedOnVideoOrNonLink())) {
       return true;
     }
 
@@ -160,7 +165,7 @@
 
   // 1. Intercept window.open
   const nativeOpen = window.open;
-  window.open = function (url, target, features) {
+  window.open = function (url) {
     if (shouldBlockPopup(url)) {
       notifyBlocked();
       return createFakeWindow();
@@ -178,7 +183,7 @@
       const isHiddenOrDetached =
         !this.isConnected || (this.offsetWidth === 0 && this.offsetHeight === 0);
 
-      if (isBlank && isHiddenOrDetached && shouldBlockPopup(href)) {
+      if (isBlank && (isHiddenOrDetached || isInsideIframe()) && shouldBlockPopup(href)) {
         notifyBlocked();
         return;
       }
@@ -186,12 +191,63 @@
     return nativeAnchorClick.apply(this, arguments);
   };
 
-  // 3. Intercept invisible transparent full-screen click-hijack overlays over videos
+  // 3. Intercept <form target="_blank"> ad submissions
+  const nativeFormSubmit = HTMLFormElement.prototype.submit;
+  HTMLFormElement.prototype.submit = function () {
+    if (isGuardActive()) {
+      const target = (this.getAttribute("target") || "").toLowerCase();
+      const action = this.getAttribute("action") || "";
+      if ((target === "_blank" || target === "_new") && shouldBlockPopup(action)) {
+        notifyBlocked();
+        return;
+      }
+    }
+    return nativeFormSubmit.apply(this, arguments);
+  };
+
+  // 4. Intercept real user clicks on invisible/empty <a target="_blank"> overlays over video players
+  document.addEventListener(
+    "click",
+    (e) => {
+      lastUserClickTarget = e.target;
+      lastUserClickTime = Date.now();
+      if (!isGuardActive()) return;
+      const el = e.target;
+      if (!(el instanceof Element)) return;
+
+      const anchor = el.closest("a[href]");
+      if (!anchor) return;
+
+      const target = (anchor.getAttribute("target") || "").toLowerCase();
+      const href = anchor.href || "";
+      if (!href || isSafeAuthUrl(href)) return;
+
+      const parsed = resolveUrl(href);
+      const isCrossOrigin = parsed && parsed.origin !== window.location.origin;
+      const isEmptyOverlay =
+        anchor.textContent.trim() === "" && !anchor.querySelector("img, svg");
+
+      if (
+        (target === "_blank" || target === "_new" || isInsideIframe()) &&
+        isCrossOrigin &&
+        (isEmptyOverlay || isKnownAdUrl(href))
+      ) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        anchor.style.setProperty("display", "none", "important");
+        anchor.style.setProperty("pointer-events", "none", "important");
+        notifyBlocked();
+      }
+    },
+    true
+  );
+
+  // 5. Neutralize invisible transparent click-hijack overlays
   function neutralizeInvisibleOverlays() {
     if (!isGuardActive() || !document.body) return;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    if (vw < 200 || vh < 200) return;
+    if (vw < 150 || vh < 150) return;
 
     const candidates = document.querySelectorAll("div, a, ins");
     for (const el of candidates) {
@@ -200,21 +256,21 @@
 
       const style = getComputedStyle(el);
       if (style.position !== "fixed" && style.position !== "absolute") continue;
-      const z = parseInt(style.zIndex, 10);
-      if (!Number.isFinite(z) || z < 999) continue;
 
       const rect = el.getBoundingClientRect();
-      const coversLargeArea = rect.width >= vw * 0.6 && rect.height >= vh * 0.5;
-      if (!coversLargeArea) continue;
+      const isLargeOverlay =
+        rect.width >= vw * 0.45 && rect.height >= vh * 0.4;
+      if (!isLargeOverlay) continue;
 
+      const isEmpty =
+        el.textContent.trim() === "" && el.children.length === 0;
       const isTransparent =
         parseFloat(style.opacity) === 0 ||
         (style.backgroundColor === "rgba(0, 0, 0, 0)" &&
           style.backgroundImage === "none" &&
-          el.textContent.trim() === "" &&
-          el.children.length === 0);
+          isEmpty);
 
-      if (isTransparent) {
+      if (isTransparent && (el.tagName === "A" || parseInt(style.zIndex, 10) >= 10)) {
         el.style.setProperty("display", "none", "important");
         el.style.setProperty("pointer-events", "none", "important");
         notifyBlocked();

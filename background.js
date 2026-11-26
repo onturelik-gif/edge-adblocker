@@ -36,15 +36,45 @@ const POPUP_AD_PATTERNS = [
   /\/go\.php/i
 ];
 
+const SAFE_NEW_TAB_PATTERNS = [
+  /youtube\.com/i,
+  /youtu\.be/i,
+  /vimeo\.com/i,
+  /twitch\.tv/i,
+  /accounts\.google\.com/i,
+  /login\.microsoftonline\.com/i,
+  /login\.live\.com/i,
+  /appleid\.apple\.com/i,
+  /github\.com\/login/i,
+  /\/oauth/i,
+  /\/authorize/i,
+  /\/sso\b/i,
+  /\/checkout/i,
+  /3dsecure/i
+];
+
 const WHITELIST_RULE_START = 10000;
 const CUSTOM_BLOCK_RULE_START = 20000;
 
 const tabBlockedCounts = new Map();
 const recentSpawnedTabs = new Map();
+const lastVideoClickByTab = new Map();
 
 function isPopupAdUrl(url) {
   if (!url || typeof url !== "string") return false;
   return POPUP_AD_PATTERNS.some((re) => re.test(url));
+}
+
+function isSafeNewTabUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  return SAFE_NEW_TAB_PATTERNS.some((re) => re.test(url));
+}
+
+function isCrossSite(urlA, urlB) {
+  const hostA = getHostnameFromUrl(urlA);
+  const hostB = getHostnameFromUrl(urlB);
+  if (!hostA || !hostB) return false;
+  return hostA !== hostB && !hostA.endsWith("." + hostB) && !hostB.endsWith("." + hostA);
 }
 
 function normalizeDomain(input) {
@@ -229,7 +259,13 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     const now = Date.now();
     const spawned = recentSpawnedTabs.get(tabId);
     if (spawned && now - spawned.createdAt < 4000) {
-      if (isPopupAdUrl(changeInfo.url)) {
+      const shouldKill =
+        isPopupAdUrl(changeInfo.url) ||
+        (spawned.suspicious &&
+          isCrossSite(spawned.sourceUrl, changeInfo.url) &&
+          !isSafeNewTabUrl(changeInfo.url));
+
+      if (shouldKill) {
         recentSpawnedTabs.delete(tabId);
         chrome.tabs.remove(tabId).catch(() => {});
         chrome.tabs.update(spawned.sourceTabId, { active: true }).catch(() => {});
@@ -274,7 +310,17 @@ if (chrome.webNavigation && chrome.webNavigation.onCreatedNavigationTarget) {
     const sourceHost = getHostnameFromUrl(sourceTab.url);
     if (isDomainWhitelisted(sourceHost, settings.whitelist)) return;
 
-    if (isPopupAdUrl(details.url)) {
+    const fromSubframe = details.sourceFrameId !== 0;
+    const lastVideoClick = lastVideoClickByTab.get(details.sourceTabId) || 0;
+    const fromRecentVideoClick = Date.now() - lastVideoClick < 1500;
+    const suspicious = fromSubframe || fromRecentVideoClick;
+
+    const targetIsCrossSite = isCrossSite(sourceTab.url, details.url);
+    const shouldBlockImmediately =
+      isPopupAdUrl(details.url) ||
+      (suspicious && targetIsCrossSite && !isSafeNewTabUrl(details.url));
+
+    if (shouldBlockImmediately) {
       chrome.tabs.remove(details.tabId).catch(() => {});
       chrome.tabs.update(details.sourceTabId, { active: true }).catch(() => {});
       incrementBlocked(details.sourceTabId, 1);
@@ -285,6 +331,7 @@ if (chrome.webNavigation && chrome.webNavigation.onCreatedNavigationTarget) {
       sourceTabId: details.sourceTabId,
       sourceUrl: sourceTab.url,
       sameUrlAsSource: details.url === sourceTab.url,
+      suspicious,
       createdAt: Date.now()
     });
   });
@@ -302,6 +349,7 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabBlockedCounts.delete(tabId);
   recentSpawnedTabs.delete(tabId);
+  lastVideoClickByTab.delete(tabId);
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -408,6 +456,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         await chrome.storage.local.set(updated);
         await syncRules(updated);
         sendResponse({ ok: true, settings: updated });
+        break;
+      }
+
+      case "USER_VIDEO_CLICK": {
+        const tabId = sender?.tab?.id;
+        if (typeof tabId === "number" && tabId >= 0) {
+          lastVideoClickByTab.set(tabId, Date.now());
+        }
+        sendResponse({ ok: true });
         break;
       }
 
