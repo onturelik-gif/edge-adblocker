@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "EdgeShield AdBlock",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Microsoft Edge için hızlı, hafif ve gizlilik odaklı reklam ve takipçi engelleyici.",
   "permissions": [
     "declarativeNetRequest",
@@ -50,6 +50,11 @@
         "id": "ruleset_trackers",
         "enabled": true,
         "path": "rules/tracker_rules.json"
+      },
+      {
+        "id": "ruleset_aggressive",
+        "enabled": true,
+        "path": "rules/aggressive_rules.json"
       }
     ]
   }

@@ -3,6 +3,7 @@ const DEFAULT_SETTINGS = {
   blockAds: true,
   blockTrackers: true,
   cosmeticFiltering: true,
+  aggressiveMode: true,
   whitelist: [],
   customBlocked: [],
   totalBlocked: 0
@@ -61,6 +62,12 @@ async function syncRules(settings) {
     enableRulesetIds.push("ruleset_trackers");
   } else {
     disableRulesetIds.push("ruleset_trackers");
+  }
+
+  if (settings.enabled && settings.aggressiveMode) {
+    enableRulesetIds.push("ruleset_aggressive");
+  } else {
+    disableRulesetIds.push("ruleset_aggressive");
   }
 
   await chrome.declarativeNetRequest.updateEnabledRulesets({
@@ -131,8 +138,9 @@ async function updateBadgeForTab(tabId, url) {
 
     const count = tabBlockedCounts.get(tabId) || 0;
     const text = count > 999 ? "999+" : count > 0 ? String(count) : "";
+    const badgeColor = settings.aggressiveMode ? "#f97316" : "#10b981";
     await chrome.action.setBadgeText({ tabId, text });
-    await chrome.action.setBadgeBackgroundColor({ tabId, color: "#10b981" });
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: badgeColor });
   } catch {
     // Tab may have been closed before badge update completed
   }

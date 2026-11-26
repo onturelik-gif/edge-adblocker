@@ -1,5 +1,6 @@
 const els = {
   logoBadge: document.getElementById("logoBadge"),
+  aggressiveBadge: document.getElementById("aggressiveBadge"),
   globalToggle: document.getElementById("globalToggle"),
   siteDomain: document.getElementById("siteDomain"),
   statusPill: document.getElementById("statusPill"),
@@ -7,6 +8,7 @@ const els = {
   pageBlockedCount: document.getElementById("pageBlockedCount"),
   totalBlockedCount: document.getElementById("totalBlockedCount"),
   resetStatsBtn: document.getElementById("resetStatsBtn"),
+  aggressiveToggle: document.getElementById("aggressiveToggle"),
   adsToggle: document.getElementById("adsToggle"),
   trackersToggle: document.getElementById("trackersToggle"),
   cosmeticToggle: document.getElementById("cosmeticToggle"),
@@ -73,12 +75,17 @@ function render(state) {
   const { settings, hostname, tabCount, isWhitelisted } = state;
 
   els.globalToggle.checked = settings.enabled;
+  const isAggOn = settings.enabled && Boolean(settings.aggressiveMode);
   els.logoBadge.classList.toggle("paused", !settings.enabled);
+  els.logoBadge.classList.toggle("aggressive", isAggOn);
+  els.aggressiveBadge.classList.toggle("hidden", !isAggOn);
 
+  els.aggressiveToggle.checked = Boolean(settings.aggressiveMode);
   els.adsToggle.checked = settings.blockAds;
   els.trackersToggle.checked = settings.blockTrackers;
   els.cosmeticToggle.checked = settings.cosmeticFiltering;
 
+  els.aggressiveToggle.disabled = !settings.enabled;
   els.adsToggle.disabled = !settings.enabled;
   els.trackersToggle.disabled = !settings.enabled;
   els.cosmeticToggle.disabled = !settings.enabled;
@@ -155,6 +162,14 @@ els.globalToggle.addEventListener("change", async () => {
   await sendMessage({
     type: "UPDATE_SETTINGS",
     patch: { enabled: els.globalToggle.checked }
+  });
+  await loadState();
+});
+
+els.aggressiveToggle.addEventListener("change", async () => {
+  await sendMessage({
+    type: "UPDATE_SETTINGS",
+    patch: { aggressiveMode: els.aggressiveToggle.checked }
   });
   await loadState();
 });

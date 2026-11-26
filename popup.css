@@ -70,6 +70,32 @@ body {
   letter-spacing: -0.01em;
 }
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.18);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.35);
+}
+
+.mode-badge.hidden {
+  display: none;
+}
+
+.logo.aggressive {
+  background: rgba(249, 115, 22, 0.18);
+  color: #fb923c;
+}
+
 .subtitle {
   font-size: 11px;
   color: var(--muted);
@@ -286,6 +312,19 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.toggle-item.aggressive-item {
+  border-color: rgba(249, 115, 22, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(249, 115, 22, 0.12),
+    rgba(30, 41, 59, 0.95)
+  );
+}
+
+.aggressive-switch input:checked + .mini-slider {
+  background: #f97316;
 }
 
 .toggle-text {
