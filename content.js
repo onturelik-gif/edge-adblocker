@@ -306,11 +306,69 @@
 
     unlockScrollIfLocked();
     hideHeuristicBanners();
+    hideAdBadgedCards();
     dismissInPlayerAdOverlays();
 
     if (newlyHidden > 0) {
       chrome.runtime
         .sendMessage({ type: "COSMETIC_BLOCKED", count: newlyHidden })
+        .catch(() => {});
+    }
+  }
+
+  function hideAdBadgedCards() {
+    if (!isAggressiveActive || !document.body) return;
+    const BADGE_RE = /^(ad|ads|reklam)$/i;
+    let hiddenCount = 0;
+
+    try {
+      const nodes = document.querySelectorAll("span, div, a, small, label");
+      for (const el of nodes) {
+        if (el.dataset.edgeshieldBadgeChecked) continue;
+        if (el.children.length > 0) continue;
+        const text = (el.textContent || "").trim();
+        if (!text || text.length > 8 || !BADGE_RE.test(text)) continue;
+
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0 || rect.width > 75 || rect.height > 32) {
+          continue;
+        }
+
+        // Climb to the enclosing square/rectangle ad card containing an image/iframe
+        let card = null;
+        let cur = el.parentElement;
+        for (let i = 0; i < 4 && cur && cur !== document.body; i++) {
+          if (PROTECTED_TAGS.has(cur.tagName) || cur.tagName === "ARTICLE") break;
+          if (cur.querySelector("video")) break;
+          const r = cur.getBoundingClientRect();
+          const hasVisual = Boolean(cur.querySelector("img, iframe, picture, canvas"));
+          if (
+            hasVisual &&
+            r.width >= 120 &&
+            r.width <= 520 &&
+            r.height >= 60 &&
+            r.height <= 460
+          ) {
+            card = cur;
+          }
+          cur = cur.parentElement;
+        }
+
+        el.dataset.edgeshieldBadgeChecked = "1";
+        if (card) {
+          card.style.setProperty("display", "none", "important");
+          card.style.setProperty("pointer-events", "none", "important");
+          card.style.setProperty("height", "0", "important");
+          card.style.setProperty("width", "0", "important");
+          collapseEmptyAdAncestors(card);
+          hiddenCount += 1;
+        }
+      }
+    } catch {}
+
+    if (hiddenCount > 0) {
+      chrome.runtime
+        .sendMessage({ type: "COSMETIC_BLOCKED", count: hiddenCount })
         .catch(() => {});
     }
   }
@@ -773,7 +831,18 @@
         anchor.textContent.trim() === "" &&
         !anchor.querySelector("img, svg");
 
-      if (isVideoArea || isEmptyOverlayAnchor || !anchor) {
+      const isInternalNormalLink = (() => {
+        if (!anchor) return false;
+        const target = (anchor.getAttribute("target") || "").toLowerCase();
+        if (target === "_blank" || target === "_new") return false;
+        try {
+          return new URL(anchor.href, location.href).origin === location.origin;
+        } catch {
+          return false;
+        }
+      })();
+
+      if (isVideoArea || isEmptyOverlayAnchor || isInternalNormalLink || !anchor) {
         chrome.runtime
           .sendMessage({ type: "USER_VIDEO_CLICK" })
           .catch(() => {});

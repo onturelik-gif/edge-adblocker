@@ -320,16 +320,17 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       }
     }
 
-    // Pop-under reversal: if source tab spawned a clone of itself and then redirected to another domain (ad), close the ad tab
+    // Pop-under reversal: if source tab spawned a same-site tab (same URL or internal link) and then redirected to a cross-site ad, close the hijacked ad tab
     for (const [childTabId, info] of recentSpawnedTabs.entries()) {
       if (
         info.sourceTabId === tabId &&
-        info.sameUrlAsSource &&
-        now - info.createdAt < 2500
+        info.sameSiteAsSource &&
+        now - info.createdAt < 3500
       ) {
-        const prevHost = getHostnameFromUrl(info.sourceUrl);
-        const nextHost = getHostnameFromUrl(changeInfo.url);
-        if (prevHost && nextHost && prevHost !== nextHost) {
+        if (
+          isCrossSite(info.sourceUrl, changeInfo.url) &&
+          !isSafeNewTabUrl(changeInfo.url)
+        ) {
           recentSpawnedTabs.delete(childTabId);
           chrome.tabs.remove(tabId).catch(() => {});
           chrome.tabs.update(childTabId, { active: true }).catch(() => {});
@@ -376,7 +377,7 @@ if (chrome.webNavigation && chrome.webNavigation.onCreatedNavigationTarget) {
     recentSpawnedTabs.set(details.tabId, {
       sourceTabId: details.sourceTabId,
       sourceUrl: sourceTab.url,
-      sameUrlAsSource: details.url === sourceTab.url,
+      sameSiteAsSource: !targetIsCrossSite,
       suspicious,
       createdAt: Date.now()
     });
