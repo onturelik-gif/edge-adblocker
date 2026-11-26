@@ -207,10 +207,52 @@
 
     unlockScrollIfLocked();
     hideHeuristicBanners();
+    dismissInPlayerAdOverlays();
 
     if (newlyHidden > 0) {
       chrome.runtime
         .sendMessage({ type: "COSMETIC_BLOCKED", count: newlyHidden })
+        .catch(() => {});
+    }
+  }
+
+  function dismissInPlayerAdOverlays() {
+    if (!isAggressiveActive || !document.body) return;
+    const CLOSE_AD_RE = /^(close ad|reklamı kapat|reklami kapat|skip ad|reklamı atla)\s*[×x✕]?$/i;
+    let dismissed = 0;
+
+    try {
+      const nodes = document.querySelectorAll("button, a, div, span");
+      for (const el of nodes) {
+        if (el.dataset.edgeshieldCloseClicked) continue;
+        if (el.children.length > 2) continue;
+        const text = (el.textContent || "").trim();
+        if (!text || text.length > 22) continue;
+        if (!CLOSE_AD_RE.test(text)) continue;
+
+        el.dataset.edgeshieldCloseClicked = "1";
+        try {
+          el.click();
+        } catch {}
+
+        // Also hide its immediate positioned overlay container if it remains visible
+        let overlay = el.parentElement;
+        for (let i = 0; i < 4 && overlay && overlay !== document.body; i++) {
+          const st = getComputedStyle(overlay);
+          if (st.position === "absolute" || st.position === "fixed") {
+            overlay.style.setProperty("display", "none", "important");
+            overlay.style.setProperty("pointer-events", "none", "important");
+            break;
+          }
+          overlay = overlay.parentElement;
+        }
+        dismissed += 1;
+      }
+    } catch {}
+
+    if (dismissed > 0) {
+      chrome.runtime
+        .sendMessage({ type: "COSMETIC_BLOCKED", count: dismissed })
         .catch(() => {});
     }
   }

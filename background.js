@@ -117,9 +117,9 @@ async function syncRules(settings) {
   const disableRulesetIds = [];
 
   if (settings.enabled && settings.blockAds) {
-    enableRulesetIds.push("ruleset_ads");
+    enableRulesetIds.push("ruleset_ads", "ruleset_community");
   } else {
-    disableRulesetIds.push("ruleset_ads");
+    disableRulesetIds.push("ruleset_ads", "ruleset_community");
   }
 
   if (settings.enabled && settings.blockTrackers) {
