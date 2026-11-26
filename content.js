@@ -225,6 +225,64 @@
     }
   }
 
+  const AD_LABEL_ONLY_RE = /^(ad|ads|reklam|reklamlar|advertisement|sponsored|sponsorlu)?$/i;
+  const PROTECTED_TAGS = new Set([
+    "HTML",
+    "BODY",
+    "MAIN",
+    "HEADER",
+    "NAV",
+    "FOOTER",
+    "FORM",
+    "TABLE",
+    "TBODY",
+    "THEAD",
+    "TR"
+  ]);
+
+  function isElementHidden(el) {
+    if (!el || el.nodeType !== 1) return true;
+    if (el.tagName === "SCRIPT" || el.tagName === "STYLE" || el.tagName === "NOSCRIPT") {
+      return true;
+    }
+    const st = getComputedStyle(el);
+    if (st.display === "none" || st.visibility === "hidden" || parseFloat(st.opacity) === 0) {
+      return true;
+    }
+    const rect = el.getBoundingClientRect();
+    return rect.width === 0 || rect.height === 0;
+  }
+
+  function collapseEmptyAdAncestors(el) {
+    if (!el || !(el instanceof Element)) return;
+    let parent = el.parentElement;
+    for (let depth = 0; depth < 3 && parent; depth++) {
+      if (PROTECTED_TAGS.has(parent.tagName)) break;
+      if (parent.id && /^(root|app|__next|content|page|main|wrapper)$/i.test(parent.id)) {
+        break;
+      }
+
+      const text = (parent.textContent || "").trim();
+      if (text.length > 18 || !AD_LABEL_ONLY_RE.test(text)) break;
+
+      const hasVisibleChild = Array.from(parent.children).some((child) => {
+        if (child === el) return false;
+        const cText = (child.textContent || "").trim();
+        if (cText && AD_LABEL_ONLY_RE.test(cText) && child.children.length === 0) {
+          return false;
+        }
+        return !isElementHidden(child);
+      });
+      if (hasVisibleChild) break;
+
+      parent.style.setProperty("display", "none", "important");
+      parent.style.setProperty("min-height", "0", "important");
+      parent.style.setProperty("margin", "0", "important");
+      parent.style.setProperty("padding", "0", "important");
+      parent = parent.parentElement;
+    }
+  }
+
   function scanAndReport() {
     if ((!isCosmeticActive && !isAggressiveActive) || !document.body) return;
     let newlyHidden = 0;
@@ -239,6 +297,7 @@
         if (!el.dataset.edgeshieldCounted) {
           el.dataset.edgeshieldCounted = "1";
           newlyHidden += 1;
+          collapseEmptyAdAncestors(el);
         }
       }
     } catch {
@@ -387,17 +446,7 @@
           a.style.setProperty("pointer-events", "none", "important");
           a.style.setProperty("height", "0", "important");
           a.style.setProperty("width", "0", "important");
-          // Collapse parent if it only wraps this single banner
-          const parent = a.parentElement;
-          if (
-            parent &&
-            parent !== document.body &&
-            parent.children.length === 1 &&
-            parent.textContent.trim().length <= 2
-          ) {
-            parent.style.setProperty("display", "none", "important");
-            parent.style.setProperty("pointer-events", "none", "important");
-          }
+          collapseEmptyAdAncestors(a);
           hiddenCount += 1;
         }
       }
@@ -532,6 +581,7 @@
       target.style.setProperty("pointer-events", "none", "important");
       target.style.setProperty("width", "0", "important");
       target.style.setProperty("height", "0", "important");
+      collapseEmptyAdAncestors(target);
       if (selector) {
         const hostname = getCurrentHostname();
         chrome.runtime
