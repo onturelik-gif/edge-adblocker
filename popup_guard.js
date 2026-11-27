@@ -401,7 +401,7 @@
     if (!el || !(el instanceof Element)) return false;
     return Boolean(
       el.querySelector(
-        "video, button, input[type='range'], [class*='control'], [class*='progress'], [class*='volume'], [class*='fullscreen']"
+        "video, button, svg, input[type='range'], [class*='control'], [class*='progress'], [class*='volume'], [class*='fullscreen'], [class*='time'], [class*='bar'], [class*='plyr'], [class*='vjs'], [class*='jw-']"
       )
     );
   }
@@ -450,10 +450,10 @@
       const isEmpty =
         el.textContent.trim() === "" && hasOnlyEmptyOrHiddenChildren(el);
       const isTransparent =
-        parseFloat(style.opacity) === 0 ||
-        (style.backgroundColor === "rgba(0, 0, 0, 0)" &&
-          style.backgroundImage === "none" &&
-          isEmpty);
+        isEmpty &&
+        (parseFloat(style.opacity) === 0 ||
+          (style.backgroundColor === "rgba(0, 0, 0, 0)" &&
+            style.backgroundImage === "none"));
 
       if (
         (isTransparent && (el.tagName === "A" || z >= 50 || looksLikeAd)) ||
