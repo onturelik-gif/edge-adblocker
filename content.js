@@ -466,6 +466,7 @@
     const CLOSE_AD_RE =
       /^(close ad|reklamı kapat|reklami kapat|skip ad|reklamı atla)\s*[×x✕]?$/i;
     let dismissed = 0;
+    const now = Date.now();
 
     try {
       const nodes = document.querySelectorAll("button, a, div, span");
@@ -475,30 +476,22 @@
         if (!text || text.length > 22) continue;
         if (!CLOSE_AD_RE.test(text)) continue;
 
-        // Climb only while ancestor does NOT contain <video> or player controls
-        let overlay = el;
-        let cur = el.parentElement;
-        while (
-          cur &&
-          cur !== document.body &&
-          cur !== document.documentElement &&
-          !containsPlayerControls(cur)
-        ) {
-          overlay = cur;
-          cur = cur.parentElement;
-        }
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) continue;
 
-        if (overlay && overlay !== document.body && overlay !== document.documentElement) {
-          lockAdSelector(overlay);
-          overlay.remove();
-        } else {
-          try {
-            el.click();
-          } catch {}
-          el.remove();
-        }
+        const lastClick = Number(el.dataset.edgeshieldLastClick || 0);
+        if (now - lastClick < 500) continue;
+        el.dataset.edgeshieldLastClick = String(now);
 
-        dismissed += 1;
+        // Trigger the player's own close handler so it unlocks video playback & controls cleanly
+        try {
+          el.click();
+        } catch {}
+
+        if (!el.dataset.edgeshieldCloseCounted) {
+          el.dataset.edgeshieldCloseCounted = "1";
+          dismissed += 1;
+        }
       }
     } catch {}
 
