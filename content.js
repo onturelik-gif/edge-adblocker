@@ -506,8 +506,29 @@
     }
   }
 
+  const SOCIAL_PLATFORM_HOSTS = [
+    "instagram.com",
+    "facebook.com",
+    "x.com",
+    "twitter.com",
+    "tiktok.com",
+    "reddit.com",
+    "pinterest.com",
+    "youtube.com",
+    "linkedin.com",
+    "github.com"
+  ];
+
   function hideHeuristicBanners() {
     if (!isAggressiveActive || !document.body) return;
+    const host = getCurrentHostname();
+    if (
+      SOCIAL_PLATFORM_HOSTS.some(
+        (d) => host === d || host.endsWith("." + d)
+      )
+    ) {
+      return;
+    }
     let hiddenCount = 0;
 
     try {
@@ -531,7 +552,6 @@
             media.getAttribute("data-lazy-src") ||
             ""
           : style.backgroundImage;
-        const imgAlt = media ? media.getAttribute("alt") || "" : "";
 
         const isCrossOrigin = (() => {
           try {
@@ -543,8 +563,7 @@
 
         const matchesBetOrAd =
           BETTING_AD_RE.test(href) ||
-          BETTING_AD_RE.test(imgSrc) ||
-          BETTING_AD_RE.test(imgAlt);
+          BETTING_AD_RE.test(imgSrc);
 
         const isExternalOrBlank =
           target === "_blank" ||
@@ -569,7 +588,7 @@
         const isExternalBannerShape =
           isEmptyText && isWideBannerShape && isExternalOrBlank;
 
-        if (matchesBetOrAd || isSponsoredRedirect || isExternalBannerShape) {
+        if (isExternalOrBlank && (matchesBetOrAd || isSponsoredRedirect || isExternalBannerShape)) {
           a.dataset.edgeshieldBannerHidden = "1";
           a.style.setProperty("display", "none", "important");
           a.style.setProperty("pointer-events", "none", "important");
