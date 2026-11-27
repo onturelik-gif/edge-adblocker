@@ -665,5 +665,41 @@
       "urlFilter": "||bngprm.com^",
       "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest", "ping", "media", "other"]
     }
+  },
+  {
+    "id": 2074,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||bucklechemistdensity.com^",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest", "ping", "media", "other"]
+    }
+  },
+  {
+    "id": 2075,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||u5s5.com^",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest", "ping", "media", "other"]
+    }
+  },
+  {
+    "id": 2076,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||demandingoverdriveunthread.com^",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest", "ping", "media", "other"]
+    }
+  },
+  {
+    "id": 2077,
+    "priority": 2,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||arrogancedanderuntruth.com^",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest", "ping", "media", "other"]
+    }
   }
 ]

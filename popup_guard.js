@@ -424,6 +424,29 @@
     const vh = window.innerHeight;
     if (vw < 150 || vh < 150) return;
 
+    // Remove ad iframes & fixed notification containers appended directly under <html> outside <body>
+    for (const child of Array.from(document.documentElement.children)) {
+      if (child.tagName === "IFRAME") {
+        child.remove();
+        notifyBlocked();
+      } else if (
+        child.tagName === "DIV" &&
+        child.id !== "edgeshield-picker-shield" &&
+        child.id !== "edgeshield-picker-overlay" &&
+        child.id !== "edgeshield-picker-toolbar" &&
+        /2147483647/.test(child.getAttribute("style") || "")
+      ) {
+        child.remove();
+        notifyBlocked();
+      }
+    }
+
+    // Remove [data-cl-overlay] transparent 1x1-GIF click-hijack layers
+    for (const ov of document.querySelectorAll("[data-cl-overlay]")) {
+      ov.remove();
+      notifyBlocked();
+    }
+
     const hasVideoOnPage = Boolean(document.querySelector("video"));
     const candidates = document.querySelectorAll("div, a, ins");
     for (const el of candidates) {
@@ -449,11 +472,13 @@
 
       const isEmpty =
         el.textContent.trim() === "" && hasOnlyEmptyOrHiddenChildren(el);
+      const isTransparentBg =
+        style.backgroundImage === "none" ||
+        /R0lGODlhAQABAIAAAAAAAP/i.test(style.backgroundImage || "");
       const isTransparent =
         isEmpty &&
         (parseFloat(style.opacity) === 0 ||
-          (style.backgroundColor === "rgba(0, 0, 0, 0)" &&
-            style.backgroundImage === "none"));
+          (style.backgroundColor === "rgba(0, 0, 0, 0)" && isTransparentBg));
 
       if (
         (isTransparent && (el.tagName === "A" || z >= 50 || looksLikeAd)) ||
@@ -505,8 +530,8 @@
           neutralizeInvisibleOverlays();
         }, 450);
       });
-      if (document.body) {
-        obs.observe(document.body, { childList: true, subtree: true });
+      if (document.documentElement) {
+        obs.observe(document.documentElement, { childList: true, subtree: true });
       }
     },
     { once: true }
