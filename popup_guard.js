@@ -396,7 +396,28 @@
     true
   );
 
-  // 5. Neutralize invisible transparent click-hijack overlays
+  // 5. Neutralize invisible transparent click-hijack / leftover blocked-ad overlays
+  function isPlayerControlNode(el) {
+    if (!el || !(el instanceof Element)) return false;
+    return Boolean(
+      el.querySelector(
+        "video, button, input[type='range'], [class*='control'], [class*='progress'], [class*='volume'], [class*='fullscreen']"
+      )
+    );
+  }
+
+  function hasOnlyEmptyOrHiddenChildren(el) {
+    if (el.children.length === 0) return true;
+    for (const child of el.children) {
+      const r = child.getBoundingClientRect();
+      const st = getComputedStyle(child);
+      if (st.display !== "none" && st.visibility !== "hidden" && parseFloat(st.opacity) > 0 && r.width > 0 && r.height > 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   function neutralizeInvisibleOverlays() {
     if (!isGuardActive() || !document.body) return;
     const vw = window.innerWidth;
@@ -407,16 +428,7 @@
     const candidates = document.querySelectorAll("div, a, ins");
     for (const el of candidates) {
       if (el.dataset.edgeshieldCheckedOverlay) continue;
-      el.dataset.edgeshieldCheckedOverlay = "1";
-
-      // Never disable transparent <div> play/pause layers inside video players; only neutralize <a>/<ins> there
-      if (
-        el.tagName === "DIV" &&
-        (hasVideoOnPage ||
-          el.closest(".video-js, .jwplayer, .plyr, [class*='player'], [id*='player']"))
-      ) {
-        continue;
-      }
+      if (isPlayerControlNode(el)) continue;
 
       const style = getComputedStyle(el);
       if (style.position !== "fixed" && style.position !== "absolute") continue;
@@ -426,21 +438,60 @@
         rect.width >= vw * 0.45 && rect.height >= vh * 0.4;
       if (!isLargeOverlay) continue;
 
+      const z = parseInt(style.zIndex, 10) || 0;
+      const idClass = `${el.id || ""} ${typeof el.className === "string" ? el.className : ""}`;
+      const looksLikeAd = /ad[-_]|[-_]ad\b|adbox|adwrap|adoverlay|banner|promo|pop|reklam/i.test(idClass);
+
+      // On video pages, preserve low-zIndex non-ad <div> layers (player's own play/pause surface)
+      if (hasVideoOnPage && el.tagName === "DIV" && !looksLikeAd && z < 50) {
+        continue;
+      }
+
       const isEmpty =
-        el.textContent.trim() === "" && el.children.length === 0;
+        el.textContent.trim() === "" && hasOnlyEmptyOrHiddenChildren(el);
       const isTransparent =
         parseFloat(style.opacity) === 0 ||
         (style.backgroundColor === "rgba(0, 0, 0, 0)" &&
           style.backgroundImage === "none" &&
           isEmpty);
 
-      if (isTransparent && (el.tagName === "A" || parseInt(style.zIndex, 10) >= 10)) {
+      if (
+        (isTransparent && (el.tagName === "A" || z >= 50 || looksLikeAd)) ||
+        (looksLikeAd && isEmpty)
+      ) {
+        el.dataset.edgeshieldCheckedOverlay = "1";
         el.style.setProperty("display", "none", "important");
         el.style.setProperty("pointer-events", "none", "important");
         notifyBlocked();
       }
     }
   }
+
+  // Also neutralize any high-zIndex empty transparent overlay the instant user tries to click through it
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (!isGuardActive() || e.button !== 0) return;
+      const el = e.target;
+      if (!(el instanceof Element) || el.tagName !== "DIV") return;
+      if (isPlayerControlNode(el)) return;
+      const st = getComputedStyle(el);
+      if (st.position !== "fixed" && st.position !== "absolute") return;
+      const z = parseInt(st.zIndex, 10) || 0;
+      if (z < 50) return;
+      const isEmpty =
+        el.textContent.trim() === "" && hasOnlyEmptyOrHiddenChildren(el);
+      const isTransparent =
+        parseFloat(st.opacity) === 0 ||
+        (st.backgroundColor === "rgba(0, 0, 0, 0)" && st.backgroundImage === "none");
+      if (isEmpty && isTransparent) {
+        el.style.setProperty("display", "none", "important");
+        el.style.setProperty("pointer-events", "none", "important");
+        notifyBlocked();
+      }
+    },
+    true
+  );
 
   let overlayTimer = null;
   document.addEventListener(
