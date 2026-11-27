@@ -1195,7 +1195,7 @@
     "action": {
       "type": "redirect",
       "redirect": {
-        "extensionPath": "/stubs/noop.js"
+        "extensionPath": "/stubs/google-ima.js"
       }
     },
     "condition": {
