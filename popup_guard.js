@@ -426,14 +426,17 @@
 
     // Remove ad iframes & fixed notification containers appended directly under <html> outside <body>
     for (const child of Array.from(document.documentElement.children)) {
+      if (
+        child.id &&
+        (child.id.startsWith("edgeshield-") || child.id.startsWith("igvp-"))
+      ) {
+        continue;
+      }
       if (child.tagName === "IFRAME") {
         child.remove();
         notifyBlocked();
       } else if (
         child.tagName === "DIV" &&
-        child.id !== "edgeshield-picker-shield" &&
-        child.id !== "edgeshield-picker-overlay" &&
-        child.id !== "edgeshield-picker-toolbar" &&
         /2147483647/.test(child.getAttribute("style") || "")
       ) {
         child.remove();
@@ -451,9 +454,16 @@
     const candidates = document.querySelectorAll("div, a, ins");
     for (const el of candidates) {
       if (el.dataset.edgeshieldCheckedOverlay) continue;
+      if (
+        el.id &&
+        (el.id.startsWith("edgeshield-") || el.id.startsWith("igvp-"))
+      ) {
+        continue;
+      }
       if (isPlayerControlNode(el)) continue;
 
       const style = getComputedStyle(el);
+      if (style.pointerEvents === "none") continue;
       if (style.position !== "fixed" && style.position !== "absolute") continue;
 
       const rect = el.getBoundingClientRect();
