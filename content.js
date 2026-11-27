@@ -90,7 +90,7 @@
     ".popup-ad",
     ".overlay-ad",
     "html > iframe",
-    "html > div[style*='2147483647']",
+    "html > div[style*='2147483647']:not([data-vss-host]):not([id^='igvp-']):not([id^='edgeshield-'])",
     "[data-cl-overlay]",
     "div[style*='R0lGODlhAQABAIAAAAAAAP']",
     ".samCodeUnit",

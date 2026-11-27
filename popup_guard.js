@@ -427,8 +427,10 @@
     // Remove ad iframes & fixed notification containers appended directly under <html> outside <body>
     for (const child of Array.from(document.documentElement.children)) {
       if (
-        child.id &&
-        (child.id.startsWith("edgeshield-") || child.id.startsWith("igvp-"))
+        (child.id &&
+          (child.id.startsWith("edgeshield-") || child.id.startsWith("igvp-"))) ||
+        child.hasAttribute("data-vss-host") ||
+        child.shadowRoot
       ) {
         continue;
       }
@@ -437,7 +439,8 @@
         notifyBlocked();
       } else if (
         child.tagName === "DIV" &&
-        /2147483647/.test(child.getAttribute("style") || "")
+        /2147483647/.test(child.getAttribute("style") || "") &&
+        getComputedStyle(child).pointerEvents !== "none"
       ) {
         child.remove();
         notifyBlocked();
@@ -455,8 +458,9 @@
     for (const el of candidates) {
       if (el.dataset.edgeshieldCheckedOverlay) continue;
       if (
-        el.id &&
-        (el.id.startsWith("edgeshield-") || el.id.startsWith("igvp-"))
+        (el.id &&
+          (el.id.startsWith("edgeshield-") || el.id.startsWith("igvp-"))) ||
+        el.hasAttribute("data-vss-host")
       ) {
         continue;
       }
