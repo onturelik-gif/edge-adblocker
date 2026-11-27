@@ -430,13 +430,34 @@
   const lockedAdSelectors = new Set();
 
   function lockAdSelector(el) {
-    const sel = buildCssSelector(el);
-    if (!sel || lockedAdSelectors.has(sel)) return;
-    lockedAdSelectors.add(sel);
+    // Only lock explicit ad-related IDs/classes; never lock generic :nth-of-type selectors that can hit video controls
+    const id = el.id || "";
+    if (id && /ad|banner|promo|reklam|sponsor/i.test(id) && !/\d{4,}/.test(id)) {
+      const sel = `#${CSS.escape(id)}`;
+      if (lockedAdSelectors.has(sel)) return;
+      lockedAdSelectors.add(sel);
+    } else {
+      const adClass = Array.from(el.classList || []).find((c) =>
+        /ad[-_]|[-_]ad\b|adbox|adwrap|adoverlay|banner|promo|reklam|sponsor/i.test(c)
+      );
+      if (!adClass) return;
+      const sel = `.${CSS.escape(adClass)}`;
+      if (lockedAdSelectors.has(sel)) return;
+      lockedAdSelectors.add(sel);
+    }
     removeStyle(LOCKED_AD_STYLE_ID);
     injectStyle(
       LOCKED_AD_STYLE_ID,
       `${Array.from(lockedAdSelectors).join(", ")} { display: none !important; visibility: hidden !important; pointer-events: none !important; opacity: 0 !important; width: 0 !important; height: 0 !important; }`
+    );
+  }
+
+  function containsPlayerControls(node) {
+    if (!node || node.nodeType !== 1) return false;
+    return Boolean(
+      node.querySelector(
+        "video, input[type='range'], [class*='control'], [class*='progress'], [class*='seek'], [class*='volume'], [class*='fullscreen'], [class*='play-btn'], [aria-label*='Play'], [aria-label*='Pause'], [aria-label*='Mute']"
+      )
     );
   }
 
@@ -454,14 +475,14 @@
         if (!text || text.length > 22) continue;
         if (!CLOSE_AD_RE.test(text)) continue;
 
-        // Climb to the highest ancestor that does NOT contain a <video> element (the exact ad overlay wrapper)
+        // Climb only while ancestor does NOT contain <video> or player controls
         let overlay = el;
         let cur = el.parentElement;
         while (
           cur &&
           cur !== document.body &&
           cur !== document.documentElement &&
-          !cur.querySelector("video")
+          !containsPlayerControls(cur)
         ) {
           overlay = cur;
           cur = cur.parentElement;

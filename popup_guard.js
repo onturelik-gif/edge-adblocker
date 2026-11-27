@@ -403,10 +403,20 @@
     const vh = window.innerHeight;
     if (vw < 150 || vh < 150) return;
 
+    const hasVideoOnPage = Boolean(document.querySelector("video"));
     const candidates = document.querySelectorAll("div, a, ins");
     for (const el of candidates) {
       if (el.dataset.edgeshieldCheckedOverlay) continue;
       el.dataset.edgeshieldCheckedOverlay = "1";
+
+      // Never disable transparent <div> play/pause layers inside video players; only neutralize <a>/<ins> there
+      if (
+        el.tagName === "DIV" &&
+        (hasVideoOnPage ||
+          el.closest(".video-js, .jwplayer, .plyr, [class*='player'], [id*='player']"))
+      ) {
+        continue;
+      }
 
       const style = getComputedStyle(el);
       if (style.position !== "fixed" && style.position !== "absolute") continue;
